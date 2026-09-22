@@ -1,0 +1,16 @@
+mode: event
+evbuild:
+  type: ideal
+  overlap: allow
+  triggerDetector: sts
+  minNumDigis: 1000
+  maxNumDigis: -1
+  trigWinMin: -500
+  trigWinMax: 500
+sts:
+  useGpu: false
+trd:
+  trigThresh: 0.5e-6
+littrack:
+  trackingType: branch
+  mergingType: nearest_hit

@@ -1,0 +1,54 @@
+global:
+  collisionSystem: Au+Au
+  beamMomentum: 12.
+
+target:
+  material: Gold
+  thickness: 0.025
+  diameter: 2.5
+  position: [0.0, 0.0, -44.0]
+  rotationY: 0.0
+
+beam:
+  ## Options for beam generator:
+  massNumber: 197
+  chargeNumber: 79
+  chargeState: 79
+  startZ: -44.0125
+
+  ## Options used for all generators:
+  positionXY: [0.0, 0.0]
+  zFocus: -44.0
+  sigmaXY: [0.06, 0.06]
+  angle:
+    xy: [0.0, 0.0]
+    sigmaXY: [0.001, 0.001]
+
+reactionplane:
+  random: true
+  psi: [0., 360.]
+
+geant:
+  version: 4
+  vmcsettings:
+    physicsLists: QGSP_BERT_EMV+optical
+    specialProcesses: stepLimiter+specialCuts
+    maxNSteps: 10000
+    commands: []
+
+stackFilter:
+  storeAllPrimaries: true
+  storeAllMothers: true
+  storeAllDecays: true
+
+detectors:
+  subsystems:
+    magnet: v22a
+    pipe: v21d:v24h
+    mvd: v20d_tr
+    sts: v22d
+    rich: v25a
+    trd: v25a_1e
+    tof: v21a_1e
+    fsd: v25h
+    platform: v22b

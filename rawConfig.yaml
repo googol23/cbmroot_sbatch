@@ -1,0 +1,25 @@
+timeslice:
+  storeAllTimeslices: true
+  startTime: 5000
+  length: 1.e5
+  timeDist: uniform
+
+background:
+  produceNoise: true
+
+detectors:
+  # deactivateAllBut: sts   # or: deactivate: [mvd, rich]
+  subsystems:
+    magnet: v22a
+    pipe: v21d:v24h
+    mvd: v20d_tr
+    sts: v22d
+    rich: v25a
+    trd: v25a_1e
+    tof: v21a_1e
+    fsd: v25h
+    platform: v22b
+
+  deadChannelFiles:
+    sts: "/lustre/cbm/users/dramirez/parameters/channel_mask.txt"
+  
