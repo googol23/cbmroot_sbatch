@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+source "/lustre/cbm/users/${USER}/slurm_scripts/run_common.sh"
+
+log "Success job."
+
+sleep 1

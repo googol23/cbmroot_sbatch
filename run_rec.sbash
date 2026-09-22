@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+source /lustre/cbm/users/${USER}/slurm_scripts/run_common.sh
+
+# ---------------------------------------------------------------------------
+# Validate requirements
+# ---------------------------------------------------------------------------
+
+require_file "${TRANSPORT_OUTPUT}" "Transport output file"
+require_file "${DIGITIZATION_OUTPUT}" "Digitization output file"
+require_file "${TRANSPORT_PARMET}" "Digitization parameter file"
+require_file "${REC_CONFIG_FILE}" "Reconstruction configuration file"
+require_file "${RECONSTRUCTION_BIN}" "Reconstruction binnary file"
+
+require_command "root"
+
+# ---------------------------------------------------------------------------
+# Reconstruction
+# ---------------------------------------------------------------------------
+log "Starting reconstruction."
+
+run_command "${RECONSTRUCTION_BIN}" \
+  --transport "${TRANSPORT_OUTPUT}" \
+  --parameter "${DIGITIZATION_PARMET}" \
+  --digitization "${DIGITIZATION_OUTPUT}" \
+  --output "${RECONSTRUCTION_OUTPUT}" \
+  --setup "${SETUP_TAG}" \
+  --ntimeslices ${NEVENTS} \
+  --config "${REC_CONFIG_FILE}" \
+  --overwrite \
+  > "${RECONSTRUCTION_LOG}" 2>&1
+
+
+
+
+# require_file "${RECONSTRUCTION_MACRO}"
+# RECO_PARAMETERS="\"${DIGITIZATION_OUTPUT}\", -1, 0, \"${RECONSTRUCTION_OUTPUT}\", \"\", \"${SETUP_TAG}\", \"${DIGITIZATION_PARMET}\""
+# root -l -q -b "${RECONSTRUCTION_MACRO}(${RECO_PARAMETERS})"
+# run_command "${ROOT}" "${RECONSTRUCTION_MACRO}(${RECO_PARAMETERS})" \

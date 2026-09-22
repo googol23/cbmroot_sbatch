@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+source /lustre/cbm/users/${USER}/slurm_scripts/run_common.sh
+
+# ---------------------------------------------------------------------------
+# Validate requirements
+# ---------------------------------------------------------------------------
+require_file "${TRANSPORT_OUTPUT}" "Transport output file"
+require_file "${DIGITIZATION_OUTPUT}" "Digitization output file"
+require_file "${DIGITIZATION_PARMET}" "Reconstruction output file"
+require_file "${RECONSTRUCTION_OUTPUT}" "Reconstruction output file"
+
+require_file "${QA_MACRO}" "General QA macro"
+require_command "root"
+
+# ---------------------------------------------------------------------------
+# General QA
+# ---------------------------------------------------------------------------
+log "Starting QA execution"
+
+QA_PARAMETERS="\"${TRANSPORT_OUTPUT}\", \"${DIGITIZATION_OUTPUT}\", \"${RECONSTRUCTION_OUTPUT}\", \"${DIGITIZATION_PARMET}\", \"${QA_OUTPUT}\", \"${SETUP_TAG}\", ${NEVENTS}, \"\", \"\", \"\", \"Ideal\", \"\""
+root -l -q -b "${QA_MACRO}(${QA_PARAMETERS})" > "${QA_LOG}" 2>&1
+

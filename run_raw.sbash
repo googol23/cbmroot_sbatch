@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+source /lustre/cbm/users/${USER}/slurm_scripts/run_common.sh
+
+# ---------------------------------------------------------------------------
+# Validate requirements
+# ---------------------------------------------------------------------------
+require_file "${TRANSPORT_OUTPUT}" "Transport output file"
+require_file "${TRANSPORT_PARMET}" "Transport parameter file"
+require_file "${RAW_CONFIG_FILE}" "Configuration file"
+
+require_command "${DIGITIZATION_BIN}"
+
+# ---------------------------------------------------------------------------
+# Digitization
+# ---------------------------------------------------------------------------
+cp ${TRANSPORT_PARMET} ${DIGITIZATION_PARMET}
+
+log "Starting digitization."
+run_command "${DIGITIZATION_BIN}" \
+  -t "${TRANSPORT_OUTPUT}" \
+  -p "${DIGITIZATION_PARMET}" \
+  -o "${DIGITIZATION_OUTPUT}" \
+  -c "${RAW_CONFIG_FILE}" \
+  -n "${NEVENTS}" \
+  -w \
+  > "${DIGITIZATION_LOG}" 2>&1  
+
+log "Digitization completed: ${DIGITIZATION_OUTPUT}"
+
+

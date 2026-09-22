@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+source /lustre/cbm/users/${USER}/slurm_scripts/run_common.sh
+
+# ---------------------------------------------------------------------------
+# Validate requirements
+# ---------------------------------------------------------------------------
+
+#require_file "${INPUT_FILE}" "Generator input file"
+#require_file "${TRA_CONFIG_FILE}" "Configuration file"
+
+#require_command "${TRANSPORT_BIN}"
+#require_command "root"
+
+# ---------------------------------------------------------------------------
+# Transport
+# ---------------------------------------------------------------------------
+
+#log "Starting transport simulation."
+
+run_command "${TRANSPORT_BIN}" \
+ -i "unigen=${INPUT_FILE}" \
+  -o "${TRANSPORT_OUTPUT}" \
+  -c "${TRA_CONFIG_FILE}" \
+  -s "${SETUP_TAG}" \
+  -n "${NEVENTS}" \
+  -w \
+  > "${TRANSPORT_LOG}" 2>&1
+  
+
+# ---------------------------------------------------------------------------
+# Transport QA
+# ---------------------------------------------------------------------------
+# require_file "${TRANSPORT_OUTPUT}" "Transport output"
+
+# log "Starting transport QA."
+# run_command "${ROOT}" \
+#     "${QA_TRANSPORT_MACRO}(\"${TRANSPORT_OUTPUT}\", \"\", ${NEVENTS}, \"${QA_TRANSPORT_OUTPUT}\")"
+# log "Transport QA finished."
