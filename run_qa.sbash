@@ -1,25 +1,120 @@
 #!/usr/bin/env bash
 
-set -o pipefail
+set -euo pipefail
 
-source /lustre/cbm/users/${USER}/slurm_scripts/run_common.sh
+source /lustre/cbm/users/${USER}/CBMROOT_260819/install/bin/CbmRootConfig.sh -o
 
-# ---------------------------------------------------------------------------
-# Validate requirements
-# ---------------------------------------------------------------------------
-require_file "${TRANSPORT_OUTPUT}" "Transport output file"
-require_file "${DIGITIZATION_OUTPUT}" "Digitization output file"
-require_file "${DIGITIZATION_PARMET}" "Reconstruction output file"
-require_file "${RECONSTRUCTION_OUTPUT}" "Reconstruction output file"
+OUTPUT_DIR="/lustre/cbm/users/${USER}/mc/out/event_based/default"
+SLURM_DIR="/lustre/cbm/users/${USER}/slurm_scripts"
 
-require_file "${QA_MACRO}" "General QA macro"
-require_command "root"
+QA_MACRO="${SLURM_DIR}/run_qa.C"
+SETUP_TAG="sis100_electron"
 
-# ---------------------------------------------------------------------------
-# General QA
-# ---------------------------------------------------------------------------
-log "Starting QA execution"
+TASK_RANGE="${TASK_RANGE:?TASK_RANGE was not provided by submit.sh}"
 
-QA_PARAMETERS="\"${TRANSPORT_OUTPUT}\", \"${DIGITIZATION_OUTPUT}\", \"${RECONSTRUCTION_OUTPUT}\", \"${DIGITIZATION_PARMET}\", \"${QA_OUTPUT}\", \"${SETUP_TAG}\", ${NEVENTS}, \"\", \"\", \"\", \"Ideal\", \"\""
-root -l -q -b "${QA_MACRO}(${QA_PARAMETERS})" > "${QA_LOG}" 2>&1
+echo "QA will process task range: ${TASK_RANGE}"
 
+START_TASK="${TASK_RANGE%-*}"
+END_TASK="${TASK_RANGE#*-}"
+
+TASK_IDS=()
+
+for (( task_id=START_TASK; task_id<=END_TASK; task_id++ )); do
+    TASK_IDS+=("${task_id}")
+done
+
+echo "Number of chunks: ${#TASK_IDS[@]}"
+echo "Task IDs: ${TASK_IDS[*]}"
+
+TRA_FILES=()
+RAW_FILES=()
+RECO_FILES=()
+
+for task_id in "${TASK_IDS[@]}"; do
+    TRA_FILES+=("${OUTPUT_DIR}/tra/${task_id}/${task_id}.tra.root")
+    RAW_FILES+=("${OUTPUT_DIR}/raw/${task_id}/${task_id}.digi.root")
+    RECO_FILES+=("${OUTPUT_DIR}/reco/${task_id}/${task_id}.reco.root")
+done
+
+echo
+echo "Transport files:"
+printf '  %s\n' "${TRA_FILES[@]}"
+
+echo
+echo "Digitization files:"
+printf '  %s\n' "${RAW_FILES[@]}"
+
+echo
+echo "Reconstruction files:"
+printf '  %s\n' "${RECO_FILES[@]}"
+
+FIRST_TASK="${TASK_IDS[0]}"
+PAR_FILE="${OUTPUT_DIR}/raw/${FIRST_TASK}/${FIRST_TASK}.par.root"
+
+if [[ ! -f "${PAR_FILE}" ]]; then
+    echo "ERROR: Missing parameter file: ${PAR_FILE}" >&2
+    exit 1
+fi
+
+echo
+echo "Parameter file:"
+echo "  ${PAR_FILE}"
+
+QA_OUT_DIR="${OUTPUT_DIR}/qa"
+QA_OUTPUT="${QA_OUT_DIR}/qa.root"
+QA_LOG="${QA_OUT_DIR}/qa.log"
+
+mkdir -p "${QA_OUT_DIR}"
+
+echo
+echo "QA output:"
+echo "  ${QA_OUTPUT}"
+
+echo "QA log:"
+echo "  ${QA_LOG}"
+
+make_cpp_vector() {
+    local result="{"
+    local file
+
+    for file in "$@"; do
+        result+="\"${file}\","
+    done
+
+    result="${result%,}"
+    result+="}"
+
+    printf '%s' "${result}"
+}
+
+TRA_CPP="$(make_cpp_vector "${TRA_FILES[@]}")"
+RAW_CPP="$(make_cpp_vector "${RAW_FILES[@]}")"
+RECO_CPP="$(make_cpp_vector "${RECO_FILES[@]}")"
+
+echo
+echo "C++ transport vector:"
+echo "${TRA_CPP}"
+
+echo
+echo "C++ digitization vector:"
+echo "${RAW_CPP}"
+
+echo
+echo "C++ reconstruction vector:"
+echo "${RECO_CPP}"
+
+
+QA_CALL="${QA_MACRO}(${TRA_CPP},${RAW_CPP},${RECO_CPP},\"${PAR_FILE}\",\"${QA_OUTPUT}\",\"${SETUP_TAG}\",-1)"
+
+echo
+echo "ROOT macro call:"
+echo "${QA_CALL}"
+
+echo
+echo "Starting QA."
+
+root -l -q -b "${QA_CALL}" > "${QA_LOG}" 2>&1
+
+echo "QA finished."
+echo "Output: ${QA_OUTPUT}"
+echo "Log:    ${QA_LOG}"
