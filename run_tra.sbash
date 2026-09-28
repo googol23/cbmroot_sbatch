@@ -2,7 +2,7 @@
 
 set -o pipefail
 
-source /lustre/cbm/users/${USER}/slurm_scripts/run_common.sh
+source /lustre/cbm/users/${USER}/slurm_scripts_v2/run_common.sh
 
 # ---------------------------------------------------------------------------
 # Validate requirements

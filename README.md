@@ -13,13 +13,13 @@ Each stage can be submitted as a Slurm array job. Output from every array task i
 
 ## Requirements
 
-- Linux with Bash
+- Linux with Bash; Python 3 and PyYAML on the submission host
 - A Slurm workload manager (`sbatch`, `squeue`)
 - A working CBMROOT environment
 - Access to the required input data and cluster storage
 - ROOT for QA macros that use it
 
-The scripts contain installation paths, input paths, output paths, setup tags, resource limits, and configuration-file locations that must be adapted to the local environment.
+Edit `default_config.yaml` for your cluster, especially the CBMROOT setup path, input/output directories, and resource limits. It contains all run, transport, digitization, and reconstruction settings. The submission host's `log_dir` must be visible to the compute nodes.
 
 ## Basic usage
 
@@ -29,13 +29,24 @@ Make the scripts executable:
 chmod +x *.sh *.sbash
 ```
 
-Submit selected processing stages for a Slurm array:
+Submit the stages and task range in a run configuration:
 
 ```bash
-./submit.sh --transport --digitization --reconstruction --jobs 1-20
+./run_jobs.sh default_config.yaml
 ```
 
-Stage names and submission-script names may differ slightly depending on the current repository version. Run the relevant script with `--help`, or inspect its option definitions, before submission.
+Create another YAML for another batch run. Each file has four top-level mappings: `run`, `transport`, `digitization`, and `reconstruction`. The three stage mappings contain the original contents of `traConfig.yaml`, `rawConfig.yaml`, and `recConfig.yaml`, respectively. Those separate source files are no longer needed for submission.
+
+`run_jobs.sh` validates the YAML and writes a unique snapshot under `log_dir/config.*`, including the three stage YAML files passed to CBMROOT. Keep the snapshot until its queued jobs finish. Use distinct `output_dir` values for runs that might overlap.
+
+The original manual CLI remains available:
+
+```bash
+./run_jobs.sh --transport --digitization --reconstruction --jobs 1-20
+./run_jobs.sh custom_config.yaml --transport --jobs 1,3,7-10
+```
+
+When any stage flag is supplied, those flags replace the YAML stage list. `--jobs` overrides `task_range`; `--test` turns on test mode. A CLI-only call uses the other settings from `default_config.yaml` and submits only the stages named on the CLI. Run `./run_jobs.sh --help` for all options.
 
 Task selections generally support Slurm array expressions such as:
 
@@ -83,7 +94,7 @@ Before running the pipeline, review at least:
 
 - CBMROOT environment setup path
 - Input and output directories
-- YAML configuration files
+- Central configuration (`default_config.yaml`), including all three CBMROOT stages
 - Detector setup tag
 - Number of events
 - Slurm partition, memory, and time limits

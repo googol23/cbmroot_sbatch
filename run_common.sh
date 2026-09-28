@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 set -o pipefail
+USER="${USER:-$(id -un)}"
+export USER
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -50,22 +52,30 @@ TASK_ID="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is not defined. Submit this 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-source /lustre/cbm/users/${USER}/CBMROOT_260819/install/bin/CbmRootConfig.sh -o
+CBM_RUN_DIR="${CBM_RUN_DIR:-/lustre/cbm/users/${USER}/slurm_scripts_v2}"
+: "${CFG_CBMROOT_SETUP:?Submit this job through run_jobs.sh}"
+: "${CFG_INPUT_DIR:?Missing run input directory}"
+: "${CFG_OUTPUT_DIR:?Missing run output directory}"
+: "${CFG_TRA_CONFIG:?Missing transport configuration}"
+: "${CFG_RAW_CONFIG:?Missing digitization configuration}"
+: "${CFG_REC_CONFIG:?Missing reconstruction configuration}"
+: "${CFG_SETUP_TAG:?Missing setup tag}"
+: "${CFG_NEVENTS:?Missing event count}"
+source "$CFG_CBMROOT_SETUP" -o
 
-NEVENTS=999
-
-SETUP_TAG="sis100_electron"
-INPUT_DIR="/lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root"
-OUTPUT_DIR="/lustre/cbm/users/${USER}/mc/out"
-SLURM_DIR="/lustre/cbm/users/${USER}/slurm_scripts"
+NEVENTS="$CFG_NEVENTS"
+SETUP_TAG="$CFG_SETUP_TAG"
+INPUT_DIR="$CFG_INPUT_DIR"
+OUTPUT_DIR="$CFG_OUTPUT_DIR"
+SLURM_DIR="$CBM_RUN_DIR"
 CBMROOT_DIR="${VMCWORKDIR%share/cbmroot}"
 
 log "OUTPUT_DIR: ${OUTPUT_DIR}"
 log "CBMROOT_DIR: ${CBMROOT_DIR}"
 
-TRA_CONFIG_FILE="${SLURM_DIR}/traConfig.yaml"
-RAW_CONFIG_FILE="${SLURM_DIR}/rawConfig.yaml"
-REC_CONFIG_FILE="${SLURM_DIR}/recConfig.yaml"
+TRA_CONFIG_FILE="$CFG_TRA_CONFIG"
+RAW_CONFIG_FILE="$CFG_RAW_CONFIG"
+REC_CONFIG_FILE="$CFG_REC_CONFIG"
 
 ROOT="root -l -q -b"
 
@@ -116,6 +126,7 @@ QA_SUMMARY_OUTPUT="${OUTPUT_DIR}/${TASK_ID}.qa.root"
 
 mkdir -p "${TRANSPORT_OUT_DIR}"
 mkdir -p "${DIGITIZATION_OUT_DIR}"
+mkdir -p "${RECONSTRUCTION_OUT_DIR}"
 mkdir -p "${QA_OUT_DIR}"
 
 log "Slurm job ID: ${JOB_ID}"

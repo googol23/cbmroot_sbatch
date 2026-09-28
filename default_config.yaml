@@ -1,0 +1,116 @@
+# One source for run settings and the original CBMROOT stage configurations.
+# Use separate output_dir and log_dir values for overlapping runs.
+run:
+  stages: [transport, digitization, reconstruction]
+  task_range: "101-200"
+  pipeline_test: false
+  job_name: cbmsim
+  partition: long
+  mem_per_cpu: 64G
+  time: "02:00:00"
+  cbmroot_setup: /lustre/cbm/users/${USER}/CBMROOT_260819/install/bin/CbmRootConfig.sh
+  input_dir: /lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root
+  output_dir: /lustre/cbm/users/${USER}/mc/out/event_based/default
+  log_dir: /lustre/cbm/users/${USER}/mc/out/event_based/default/log/
+  setup_tag: sis100_electron
+  nevents: 999
+
+transport:
+  global:
+    collisionSystem: Au+Au
+    beamMomentum: 12.
+
+  target:
+    material: Gold
+    thickness: 0.025
+    diameter: 2.5
+    position: [0.0, 0.0, -44.0]
+    rotationY: 0.0
+
+  beam:
+    ## Options for beam generator:
+    massNumber: 197
+    chargeNumber: 79
+    chargeState: 79
+    startZ: -44.0125
+
+    ## Options used for all generators:
+    positionXY: [0.0, 0.0]
+    zFocus: -44.0
+    sigmaXY: [0.06, 0.06]
+    angle:
+      xy: [0.0, 0.0]
+      sigmaXY: [0.001, 0.001]
+
+  reactionplane:
+    random: true
+    psi: [0., 360.]
+
+  geant:
+    version: 4
+    vmcsettings:
+      physicsLists: QGSP_BERT_EMV+optical
+      specialProcesses: stepLimiter+specialCuts
+      maxNSteps: 10000
+      commands: []
+
+  stackFilter:
+    storeAllPrimaries: true
+    storeAllMothers: true
+    storeAllDecays: true
+
+  detectors:
+    subsystems:
+      magnet: v22a
+      pipe: v21d:v24h
+      mvd: v20d_tr
+      sts: v22d
+      rich: v25a
+      trd: v25a_1e
+      tof: v21a_1e
+      fsd: v25h
+      platform: v22b
+
+digitization:
+  timeslice:
+    storeAllTimeslices: true
+    startTime: 5000
+    length: 1.e5
+    timeDist: uniform
+
+  background:
+    produceNoise: true
+
+  detectors:
+    # deactivateAllBut: sts   # or: deactivate: [mvd, rich]
+    subsystems:
+      magnet: v22a
+      pipe: v21d:v24h
+      mvd: v20d_tr
+      sts: v22d
+      rich: v25a
+      trd: v25a_1e
+      tof: v21a_1e
+      fsd: v25h
+      platform: v22b
+
+    # deadChannelFiles:
+    #   sts: "/lustre/cbm/users/dramirez/parameters/channel_mask.txt"
+
+reconstruction:
+  mode: event
+  evbuild:
+    type: ideal
+    overlap: allow
+    triggerDetector: sts
+    minNumDigis: 1000
+    maxNumDigis: -1
+    trigWinMin: -500
+    trigWinMax: 500
+  sts:
+    useGpu: false
+  trd:
+    trigThresh: 0.5e-6
+  littrack:
+    trackingType: branch
+    mergingType: nearest_hit
