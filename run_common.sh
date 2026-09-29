@@ -61,7 +61,7 @@ CBM_RUN_DIR="${CBM_RUN_DIR:-/lustre/cbm/users/${USER}/slurm_scripts_v2}"
 : "${CFG_REC_CONFIG:?Missing reconstruction configuration}"
 : "${CFG_SETUP_TAG:?Missing setup tag}"
 : "${CFG_NEVENTS:?Missing event count}"
-source "$CFG_CBMROOT_SETUP" -o
+source ${CFG_CBMROOT_SETUP} -o
 
 NEVENTS="$CFG_NEVENTS"
 SETUP_TAG="$CFG_SETUP_TAG"
