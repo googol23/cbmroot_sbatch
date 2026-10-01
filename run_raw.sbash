@@ -2,7 +2,9 @@
 
 set -o pipefail
 
-source /lustre/cbm/users/${USER}/slurm_scripts_v2/run_common.sh
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/run_common.sh"
+# source /lustre/cbm/users/${USER}/slurm_scripts_v2/run_common.sh
 
 # ---------------------------------------------------------------------------
 # Validate requirements

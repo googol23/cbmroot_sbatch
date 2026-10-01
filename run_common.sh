@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
 
 set -o pipefail
+
 USER="${USER:-$(id -un)}"
 export USER
+
+# ---------------------------------------------------------------------------
+# Script location
+# ---------------------------------------------------------------------------
+# All pipeline scripts are expected to live in the same directory as this
+# file. This makes the complete pipeline directory relocatable.
+#
+# BASH_SOURCE[0] points to run_common.sh even when this file is sourced from
+# another script.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+
+CBM_RUN_DIR="${CBM_RUN_DIR:-$SCRIPT_DIR}"
+export CBM_RUN_DIR
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -46,13 +60,12 @@ run_command() {
 # ---------------------------------------------------------------------------
 # Slurm job information
 # ---------------------------------------------------------------------------
-JOB_ID="${SLURM_JOB_ID:?SLURM_JOB_ID is not defined. Run this script through Slurm.}"
-TASK_ID="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is not defined. Submit this script as a Slurm array job.}"
+JOB_ID="${SLURM_JOB_ID:?SLURM_JOB_ID is not defined. Run this script through Slurm or run_jobs.sh --local.}"
+TASK_ID="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is not defined. Run this script through Slurm or run_jobs.sh --local.}"
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-CBM_RUN_DIR="${CBM_RUN_DIR:-/lustre/cbm/users/${USER}/slurm_scripts_v2}"
 : "${CFG_CBMROOT_SETUP:?Submit this job through run_jobs.sh}"
 : "${CFG_INPUT_DIR:?Missing run input directory}"
 : "${CFG_OUTPUT_DIR:?Missing run output directory}"
@@ -61,15 +74,18 @@ CBM_RUN_DIR="${CBM_RUN_DIR:-/lustre/cbm/users/${USER}/slurm_scripts_v2}"
 : "${CFG_REC_CONFIG:?Missing reconstruction configuration}"
 : "${CFG_SETUP_TAG:?Missing setup tag}"
 : "${CFG_NEVENTS:?Missing event count}"
-source ${CFG_CBMROOT_SETUP} -o
+
+source "${CFG_CBMROOT_SETUP}" -o
 
 NEVENTS="$CFG_NEVENTS"
 SETUP_TAG="$CFG_SETUP_TAG"
 INPUT_DIR="$CFG_INPUT_DIR"
 OUTPUT_DIR="$CFG_OUTPUT_DIR"
 SLURM_DIR="$CBM_RUN_DIR"
+
 CBMROOT_DIR="${VMCWORKDIR%share/cbmroot}"
 
+log "SCRIPT_DIR: ${SCRIPT_DIR}"
 log "OUTPUT_DIR: ${OUTPUT_DIR}"
 log "CBMROOT_DIR: ${CBMROOT_DIR}"
 
@@ -82,14 +98,15 @@ ROOT="root -l -q -b"
 TRANSPORT_BIN="${CBMROOT_DIR}/bin/cbmsim_transport"
 DIGITIZATION_BIN="${CBMROOT_DIR}/bin/cbmsim_digitization"
 RECONSTRUCTION_BIN="${CBMROOT_DIR}/bin/cbmreco_offline"
-RECONSTRUCTION_MACRO="${VMCWORKDIR}//macro/run/run_reco.C"
+
+RECONSTRUCTION_MACRO="${VMCWORKDIR}/macro/run/run_reco.C"
 
 QA_TRANSPORT_MACRO="${CBMROOT_DIR}/macro/run/run_qaTra.C"
 QA_DIGITIZATION_MACRO="${CBMROOT_DIR}/macro/TODO"
 QA_RECONSTRUCTION_MACRO="${CBMROOT_DIR}/macro/TODO"
 QA_SUMMARY_MACRO="${CBMROOT_DIR}/macro/TODO"
 
-QA_MACRO=${VMCWORKDIR}/macro/run/run_qa.C
+QA_MACRO="${VMCWORKDIR}/macro/run/run_qa.C"
 
 # ---------------------------------------------------------------------------
 # Input and output files
@@ -104,7 +121,6 @@ QA_OUT_DIR="${OUTPUT_DIR}/qa/${TASK_ID}"
 TRANSPORT_OUTPUT="${TRANSPORT_OUT_DIR}/${TASK_ID}.tra.root"
 TRANSPORT_PARMET="${TRANSPORT_OUT_DIR}/${TASK_ID}.par.root"
 TRANSPORT_LOG="${TRANSPORT_OUT_DIR}/transport.log"
-
 
 DIGITIZATION_OUTPUT="${DIGITIZATION_OUT_DIR}/${TASK_ID}.digi.root"
 DIGITIZATION_PARMET="${DIGITIZATION_OUT_DIR}/${TASK_ID}.par.root"
@@ -129,8 +145,8 @@ mkdir -p "${DIGITIZATION_OUT_DIR}"
 mkdir -p "${RECONSTRUCTION_OUT_DIR}"
 mkdir -p "${QA_OUT_DIR}"
 
-log "Slurm job ID: ${JOB_ID}"
-log "Slurm array task ID: ${TASK_ID}"
+log "Slurm/local job ID: ${JOB_ID}"
+log "Task ID: ${TASK_ID}"
 log "Input file: ${INPUT_FILE}"
 log "Output base: ${OUTPUT_DIR}"
 
