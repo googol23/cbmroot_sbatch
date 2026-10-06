@@ -2,7 +2,8 @@
 
 set -o pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+: "${CBM_RUN_DIR:?CBM_RUN_DIR is not defined. Submit through run_jobs.sh}"
+SCRIPT_DIR="$CBM_RUN_DIR"
 source "${SCRIPT_DIR}/run_common.sh"
 # source /lustre/cbm/users/${USER}/slurm_scripts_v2/run_common.sh
 

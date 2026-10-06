@@ -31,6 +31,13 @@ Examples:
 EOF
 }
 
+remote_exec_warning() {
+    cat <<'EOF'
+Oe estas a punto de estallar to esta pinga.
+Syncroniza esta pinga
+EOF
+}
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 
 config_file=""
@@ -93,10 +100,40 @@ while (( $# )); do
     esac
 done
 
+
+# ---------------------------------------------------------------------------
+# Host determination
+# ---------------------------------------------------------------------------
+if ! "$local_mode"; then
+  if [[ "$(hostname)" == "lxi"* ]]; then
+    remote_exec_warning
+    read -p "Are you sure? [y/n]" -n 1 -r
+    echo    # (optional) move to a new line
+  
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      echo "Esta talla se va a conectar a VIRGO"
+      
+      SYNC_PATH=/lustre/cbm/users/dramirez/slurm_scripts_v3/
+      read -p "Quieres sync los codigos feos estos a ${SYNC_PATH}? [y/n]" -n 1 -r
+      echo    # (optional) move to a new line
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        ./sync.sh ${SYNC_PATH}
+      fi
+
+      echo "#ssh "${USER}@vae25-virgo4.hpc.gsi.de" "bash ${SYNC_PATH}/run_jobs.sh $*@""
+      ssh "${USER}@vae25-virgo4.hpc.gsi.de" "bash ${SYNC_PATH}/run_jobs.sh $*@"
+      exit 0
+    else
+      exit 1
+    fi
+  fi
+fi
+echo "Mi gente, tamo en Japon..."
+hostname
+exit 1
 # ---------------------------------------------------------------------------
 # Load configuration
 # ---------------------------------------------------------------------------
-
 explicit_config=false
 
 if [[ -n "$config_file" ]]; then
@@ -118,7 +155,6 @@ done <<< "$settings"
 # ---------------------------------------------------------------------------
 # Select pipeline stages
 # ---------------------------------------------------------------------------
-
 RUN_TRA=false
 RUN_DIG=false
 RUN_REC=false
@@ -142,6 +178,7 @@ done
 # ---------------------------------------------------------------------------
 
 TASK_RANGE="${jobs_override:-$CFG_TASK_RANGE}"
+export TASK_RANGE
 
 if [[ ! "$TASK_RANGE" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
     echo "Invalid task range: $TASK_RANGE" >&2
@@ -151,7 +188,6 @@ fi
 # ---------------------------------------------------------------------------
 # Test mode
 # ---------------------------------------------------------------------------
-
 PIPELINE_TEST="$CFG_PIPELINE_TEST"
 
 if "$test_override"; then
@@ -161,7 +197,6 @@ fi
 # ---------------------------------------------------------------------------
 # Common configuration
 # ---------------------------------------------------------------------------
-
 job_name="$CFG_JOB_NAME"
 partition="$CFG_PARTITION"
 ram="$CFG_MEM_PER_CPU"
@@ -182,7 +217,6 @@ fi
 # ===========================================================================
 # Local execution
 # ===========================================================================
-
 if "$local_mode"; then
 
     # Maximum number of independent task pipelines running concurrently.
