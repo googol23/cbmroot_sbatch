@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate one run YAML and stage its CBMROOT YAML blocks for Slurm."""
 
+import argparse
 import os
 import re
 import shutil
@@ -40,7 +41,7 @@ def fail(message):
     sys.exit(f"Invalid run configuration: {message}")
 
 
-def validate(path):
+def validate(path, pipeline_test_override=False):
     try:
         with path.open(encoding="utf-8") as stream:
             config = yaml.safe_load(stream)
@@ -90,7 +91,10 @@ def validate(path):
         settings["CFG_TASK_RANGE"],
     ):
         fail("run.task_range must be a Slurm array range such as 1-20 or 1,3,7-10")
-    if not Path(settings["CFG_CBMROOT_SETUP"]).is_file():
+    pipeline_test = pipeline_test_override or run["pipeline_test"]
+    settings["CFG_PIPELINE_TEST"] = str(pipeline_test).lower()
+
+    if not pipeline_test and not Path(settings["CFG_CBMROOT_SETUP"]).is_file():
         fail(f"CBMROOT setup file does not exist: {settings['CFG_CBMROOT_SETUP']}")
     for section in BLOCKS:
         if not isinstance(config[section], dict) or not config[section]:
@@ -99,10 +103,20 @@ def validate(path):
 
 
 def main():
-    if len(sys.argv) != 2:
-        fail("expected one YAML path")
-    path = Path(sys.argv[1]).expanduser().resolve()
-    config, settings = validate(path)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("path", type=Path, help="Run YAML configuration")
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Use pipeline test mode",
+    )
+    args = parser.parse_args()
+
+    path = args.path.expanduser().resolve()
+    config, settings = validate(
+        path,
+        pipeline_test_override=args.test,
+    )
 
     log_dir = Path(settings["CFG_LOG_DIR"])
     try:

@@ -48,6 +48,22 @@ The original manual CLI remains available:
 
 When any stage flag is supplied, those flags replace the YAML stage list. `--jobs` overrides `task_range`; `--test` turns on test mode. A CLI-only call uses the other settings from `default_config.yaml` and submits only the stages named on the CLI. Run `./run_jobs.sh --help` for all options.
 
+For remote submission, the launcher preserves CLI arguments and starts in the
+remote project directory. A configuration inside the local project is mapped to
+the same relative location under the remote project directory, including when
+the launcher is invoked from another working directory. Relative configuration
+paths are resolved against the local working directory; their parent directory
+must exist locally and be inside the project. Configurations outside the project
+must use an absolute path accessible on the submission host, which is forwarded
+unchanged. The configuration must already exist remotely or be copied by the
+optional project synchronization; argument forwarding does not copy files.
+
+Run the remote-forwarding regression tests without SSH, Slurm, or CBMROOT:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
 Task selections generally support Slurm array expressions such as:
 
 ```text

@@ -4,8 +4,14 @@ set -o pipefail
 
 : "${CBM_RUN_DIR:?CBM_RUN_DIR is not defined. Submit through run_jobs.sh}"
 SCRIPT_DIR="$CBM_RUN_DIR"
-source "${SCRIPT_DIR}/run_common.sh"
-# source /lustre/cbm/users/${USER}/slurm_scripts_v2/run_common.sh
+if source "${SCRIPT_DIR}/run_common.sh"; then
+  :
+else
+  setup_status=$?
+  printf 'Failed to load pipeline setup (exit %s): %s\n' \
+    "$setup_status" "${SCRIPT_DIR}/run_common.sh" >&2
+  exit "$setup_status"
+fi
 
 # ---------------------------------------------------------------------------
 # Validate requirements
@@ -23,14 +29,13 @@ source "${SCRIPT_DIR}/run_common.sh"
 
 #log "Starting transport simulation."
 
-run_command "${TRANSPORT_BIN}" \
+run_logged_command "${TRANSPORT_LOG}" "${TRANSPORT_BIN}" \
  -i "unigen=${INPUT_FILE}" \
   -o "${TRANSPORT_OUTPUT}" \
   -c "${TRA_CONFIG_FILE}" \
   -s "${SETUP_TAG}" \
   -n "${NEVENTS}" \
-  -w \
-  > "${TRANSPORT_LOG}" 2>&1
+  -w
   
 
 # ---------------------------------------------------------------------------

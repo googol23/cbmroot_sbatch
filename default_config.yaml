@@ -1,14 +1,14 @@
 # One source for run settings and the original CBMROOT stage configurations.
 # Use separate output_dir and log_dir values for overlapping runs.
 run:
-  stages: [transport, digitization, reconstruction]
-  task_range: "101-200"
+  stages: [transport, digitization, reconstruction, qa]
+  task_range: "1-100"
   pipeline_test: false
   job_name: cbmsim
   partition: long
   mem_per_cpu: 64G
   time: "02:00:00"
-  cbmroot_setup: /lustre/cbm/users/${USER}/CBMROOT_260819/install/bin/CbmRootConfig.sh
+  cbmroot_setup: /scratch/cbm/dramirez/cbmroot_install/bin/CbmRootConfig.sh
   input_dir: /lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root
   output_dir: /lustre/cbm/users/${USER}/mc/out/event_based/default
   log_dir: /lustre/cbm/users/${USER}/mc/out/event_based/default/log/
@@ -26,6 +26,7 @@ transport:
     diameter: 2.5
     position: [0.0, 0.0, -44.0]
     rotationY: 0.0
+    hadronicInteractions: true # set false only in a separate beam-background run
 
   beam:
     ## Options for beam generator:
@@ -59,30 +60,18 @@ transport:
     storeAllMothers: true
     storeAllDecays: true
 
-  detectors:
-    subsystems:
-      magnet: v22a
-      pipe: v21d:v24h
-      mvd: v20d_tr
-      sts: v22d
-      rich: v25a
-      trd: v25a_1e
-      tof: v21a_1e
-      fsd: v25h
-      platform: v22b
-
 digitization:
   timeslice:
-    storeAllTimeslices: true
-    startTime: 5000
+    storeAllTimeslices: false
+    startTime: 1000
     length: 1.e5
-    timeDist: uniform
-
+    timeDist: poisson
   background:
-    produceNoise: true
+    produceNoise: false
 
   detectors:
-    # deactivateAllBut: sts   # or: deactivate: [mvd, rich]
+    # deactivateAllBut: sts
+    # deactivate: [mvd]
     subsystems:
       magnet: v22a
       pipe: v21d:v24h
@@ -99,6 +88,8 @@ digitization:
 
 reconstruction:
   mode: event
+  global:
+    generateRunInfo: false
   evbuild:
     type: ideal
     overlap: allow

@@ -2,12 +2,12 @@
 # Use separate output_dir and log_dir values for overlapping runs.
 run:
   stages: [transport, digitization, reconstruction, qa]
-  task_range: "101-200"
+  task_range: "1-2"
   pipeline_test: false
   job_name: cbmsim
   partition: long
-  mem_per_cpu: 64G
-  time: "02:00:00"
+  mem_per_cpu: 16G
+  time: "01:00:00"
   cbmroot_setup: /scratch/cbm/dramirez/cbmroot_install/bin/CbmRootConfig.sh
   input_dir: /lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root
   output_dir: /lustre/cbm/users/${USER}/mc/out/test/
@@ -73,7 +73,7 @@ digitization:
 
   detectors:
     # deactivateAllBut: sts
-    deactivate: [mvd]
+    # deactivate: [mvd]
     subsystems:
       magnet: v22a
       pipe: v21d:v24h

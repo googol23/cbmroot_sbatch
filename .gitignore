@@ -1,2 +1,4 @@
 *.par
 *.root
+
+**/__pycache__/*

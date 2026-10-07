@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 
-DEST=${1:-/lustre/cbm/users/dramirez/slurm_scripts_v3/}
-
-# rsync -av \
-#     --include='*.sbash' \
-#     --include='*.sh' \
-#     --include='*.yaml' \
-#     --include='*.yml' \
-#     --exclude='*' \
-#     ./ "$DEST"
+DEST=${1:-/lustre/cbm/users/${USER}/slurm_scripts_v3/}
 
 rsync -av -e "ssh " \
     --include='*.sbash' \
@@ -18,6 +10,6 @@ rsync -av -e "ssh " \
     --include='*.yml' \
     --include='*.C' \
     --exclude='*' \
-    ./ "dramirez@lustre.hpc.gsi.de:${DEST}"
+    ./ "${USER}@lustre.hpc.gsi.de:${DEST}"
 
 echo ${DEST}

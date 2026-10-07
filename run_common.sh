@@ -30,8 +30,8 @@ require_file() {
   local file="$1"
   local description="$2"
 
-  if [[ ! -f "$file" ]]; then
-    error "${description} does not exist: ${file}"
+  if [[ ! -f "$file" || ! -r "$file" ]]; then
+    error "${description} is missing or unreadable: ${file}"
     exit 1
   fi
 }
@@ -48,11 +48,26 @@ require_command() {
 run_command() {
   log "Running: $*"
 
-  "$@"
-  local status=$?
-
-  if (( status != 0 )); then
+  if "$@"; then
+    return 0
+  else
+    local status=$?
     error "Command failed with exit code ${status}: $*"
+    exit "$status"
+  fi
+}
+
+run_logged_command() {
+  local log_file="$1"
+  shift
+
+  # A subshell lets us report both execution and redirection failures to
+  # the stage's stderr, while keeping program output in the stage log.
+  if (run_command "$@") > "$log_file" 2>&1; then
+    return 0
+  else
+    local status=$?
+    error "Stage command failed with exit code ${status}; log: ${log_file}"
     exit "$status"
   fi
 }
@@ -75,7 +90,19 @@ TASK_ID="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is not defined. Run this scr
 : "${CFG_SETUP_TAG:?Missing setup tag}"
 : "${CFG_NEVENTS:?Missing event count}"
 
-source "${CFG_CBMROOT_SETUP}" -o
+require_file "$CFG_CBMROOT_SETUP" "CBMROOT setup file"
+if source "$CFG_CBMROOT_SETUP" -o; then
+  :
+else
+  setup_status=$?
+  error "CBMROOT setup failed with exit code ${setup_status}: ${CFG_CBMROOT_SETUP}"
+  exit "$setup_status"
+fi
+
+if [[ -z "${VMCWORKDIR:-}" || "$VMCWORKDIR" != /* || ! -d "$VMCWORKDIR" ]]; then
+  error "CBMROOT setup did not provide an existing absolute VMCWORKDIR: ${VMCWORKDIR:-unset}"
+  exit 1
+fi
 
 NEVENTS="$CFG_NEVENTS"
 SETUP_TAG="$CFG_SETUP_TAG"
@@ -83,7 +110,12 @@ INPUT_DIR="$CFG_INPUT_DIR"
 OUTPUT_DIR="$CFG_OUTPUT_DIR"
 SLURM_DIR="$CBM_RUN_DIR"
 
-CBMROOT_DIR="${VMCWORKDIR%share/cbmroot}"
+CBMROOT_DIR="${VMCWORKDIR%/}"
+if [[ "$CBMROOT_DIR" != */share/cbmroot ]]; then
+  error "Expected an installed CBMROOT environment ending in /share/cbmroot: ${VMCWORKDIR}"
+  exit 1
+fi
+CBMROOT_DIR="${CBMROOT_DIR%share/cbmroot}"
 
 log "SCRIPT_DIR: ${SCRIPT_DIR}"
 log "OUTPUT_DIR: ${OUTPUT_DIR}"
@@ -140,10 +172,9 @@ QA_RECONSTRUCTION_OUTPUT="${RECONSTRUCTION_OUT_DIR}/${TASK_ID}.reco.qa.root"
 QA_RECONSTRUCTION_DC_OUTPUT="${RECONSTRUCTION_OUT_DIR}/${TASK_ID}_dc.reco.qa.root"
 QA_SUMMARY_OUTPUT="${OUTPUT_DIR}/${TASK_ID}.qa.root"
 
-mkdir -p "${TRANSPORT_OUT_DIR}"
-mkdir -p "${DIGITIZATION_OUT_DIR}"
-mkdir -p "${RECONSTRUCTION_OUT_DIR}"
-mkdir -p "${QA_OUT_DIR}"
+run_command mkdir -p -- \
+  "$TRANSPORT_OUT_DIR" "$DIGITIZATION_OUT_DIR" \
+  "$RECONSTRUCTION_OUT_DIR" "$QA_OUT_DIR"
 
 log "Slurm/local job ID: ${JOB_ID}"
 log "Task ID: ${TASK_ID}"

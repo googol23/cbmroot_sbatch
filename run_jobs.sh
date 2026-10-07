@@ -33,14 +33,17 @@ EOF
 
 remote_exec_warning() {
     cat <<'EOF'
-Oe estas a punto de estallar to esta pinga.
-Syncroniza esta pinga
+You are currently on executing the script in an enviorement that do not support SLURM jobs submission.
+
 EOF
 }
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 
+# Argument parsing consumes the positional parameters needed for remote execution.
+declare -a original_args=("$@")
 config_file=""
+config_arg_index=""
 declare -a selected_stages=()
 jobs_override=""
 test_override=false
@@ -95,6 +98,7 @@ while (( $# )); do
                 exit 2
             fi
             config_file="$1"
+            config_arg_index=$(( ${#original_args[@]} - $# ))
             shift
             ;;
     esac
@@ -107,30 +111,61 @@ done
 if ! "$local_mode"; then
   if [[ "$(hostname)" == "lxi"* ]]; then
     remote_exec_warning
-    read -p "Are you sure? [y/n]" -n 1 -r
+    SYNC_PATH=/lustre/cbm/users/dramirez/slurm_scripts_v3/
+    read -p "Current mode is set to remote execution, confirm you want to execute the command in a virgo node: [y/n]" -n 1 -r
     echo    # (optional) move to a new line
   
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      echo "Esta talla se va a conectar a VIRGO"
-      
-      SYNC_PATH=/lustre/cbm/users/dramirez/slurm_scripts_v3/
-      read -p "Quieres sync los codigos feos estos a ${SYNC_PATH}? [y/n]" -n 1 -r
+      remote_args=("${original_args[@]}")
+      if [[ -n "$config_file" ]]; then
+        # Project configs move with the project; other absolute paths refer
+        # to shared storage or a config already present on the submission host.
+        if [[ "$config_file" != /* || "$config_file" == "$SCRIPT_DIR/"* ]]; then
+          config_parent="$(dirname -- "$config_file")"
+          if ! config_parent="$(cd -- "$config_parent" && pwd -P)"; then
+            echo "Cannot resolve configuration directory: $config_file" >&2
+            exit 2
+          fi
+          config_path="${config_parent}/${config_file##*/}"
+          if [[ "$config_path" == "$SCRIPT_DIR/"* ]]; then
+            remote_args[config_arg_index]="${SYNC_PATH%/}/${config_path#"$SCRIPT_DIR/"}"
+          elif [[ "$config_file" != /* ]]; then
+            echo "Configuration is outside the project; use an absolute path on the submission host: $config_file" >&2
+            exit 2
+          fi
+        fi
+      fi
+
+      echo "Synchronization of remote folder is adviced."
+      read -p "Please confirm you want to synchronize the current script state to the remote folde: ${SYNC_PATH}? [y/n]" -n 1 -r
       echo    # (optional) move to a new line
       if [[ $REPLY =~ ^[Yy]$ ]]; then
         ./sync.sh ${SYNC_PATH}
       fi
 
-      echo "#ssh "${USER}@vae25-virgo4.hpc.gsi.de" "bash ${SYNC_PATH}/run_jobs.sh $*@""
-      ssh "${USER}@vae25-virgo4.hpc.gsi.de" "bash ${SYNC_PATH}/run_jobs.sh $*@"
-      exit 0
+      # SSH passes a command string to the login shell. POSIX single-quote
+      # escaping preserves argument boundaries without requiring Bash there.
+      quote_remote_arg() {
+        local escaped="${1//\'/\'\\\'\'}"
+        printf "'%s'" "$escaped"
+      }
+
+      remote_command="cd $(quote_remote_arg "$SYNC_PATH") && exec bash ./run_jobs.sh"
+      for arg in "${remote_args[@]}"; do
+        remote_command+=" $(quote_remote_arg "$arg")"
+      done
+
+      echo "Remote execution by:"
+      printf 'ssh %s %s\n' "${USER}@vae25-virgo4.hpc.gsi.de" "$remote_command"
+      exec ssh "${USER}@vae25-virgo4.hpc.gsi.de" "$remote_command"
     else
       exit 1
     fi
   fi
 fi
-echo "Mi gente, tamo en Japon..."
+echo "Command executed at: "
 hostname
-exit 1
+
 # ---------------------------------------------------------------------------
 # Load configuration
 # ---------------------------------------------------------------------------
@@ -145,7 +180,15 @@ fi
 CBM_RUN_DIR="$SCRIPT_DIR"
 export CBM_RUN_DIR
 
-settings="$(python3 "${SCRIPT_DIR}/config_loader.py" "$config_file")" || exit 1
+loader_args=("$config_file")
+
+if "$test_override"; then
+    loader_args+=(--test)
+fi
+
+settings="$(
+    python3 "${SCRIPT_DIR}/config_loader.py" "${loader_args[@]}"
+)" || exit 1
 
 while IFS=$'\t' read -r key value; do
     printf -v "$key" '%s' "$value"
@@ -188,11 +231,8 @@ fi
 # ---------------------------------------------------------------------------
 # Test mode
 # ---------------------------------------------------------------------------
+# The loader resolves YAML settings and the CLI test override.
 PIPELINE_TEST="$CFG_PIPELINE_TEST"
-
-if "$test_override"; then
-    PIPELINE_TEST=true
-fi
 
 # ---------------------------------------------------------------------------
 # Common configuration

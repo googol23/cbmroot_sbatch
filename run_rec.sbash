@@ -4,8 +4,14 @@ set -o pipefail
 
 : "${CBM_RUN_DIR:?CBM_RUN_DIR is not defined. Submit through run_jobs.sh}"
 SCRIPT_DIR="$CBM_RUN_DIR"
-source "${SCRIPT_DIR}/run_common.sh"
-# source /lustre/cbm/users/${USER}/slurm_scripts_v2/run_common.sh
+if source "${SCRIPT_DIR}/run_common.sh"; then
+  :
+else
+  setup_status=$?
+  printf 'Failed to load pipeline setup (exit %s): %s\n' \
+    "$setup_status" "${SCRIPT_DIR}/run_common.sh" >&2
+  exit "$setup_status"
+fi
 
 # ---------------------------------------------------------------------------
 # Validate requirements
@@ -24,7 +30,7 @@ require_command "root"
 # ---------------------------------------------------------------------------
 log "Starting reconstruction."
 
-run_command "${RECONSTRUCTION_BIN}" \
+run_logged_command "${RECONSTRUCTION_LOG}" "${RECONSTRUCTION_BIN}" \
   --transport "${TRANSPORT_OUTPUT}" \
   --parameter "${DIGITIZATION_PARMET}" \
   --digitization "${DIGITIZATION_OUTPUT}" \
@@ -32,8 +38,7 @@ run_command "${RECONSTRUCTION_BIN}" \
   --setup "${SETUP_TAG}" \
   --ntimeslices ${NEVENTS} \
   --config "${REC_CONFIG_FILE}" \
-  --overwrite \
-  > "${RECONSTRUCTION_LOG}" 2>&1
+  --overwrite
 
 
 
