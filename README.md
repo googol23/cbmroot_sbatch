@@ -1,130 +1,244 @@
 # CBMROOT Slurm Pipeline
 
-This repository contains Bash scripts for running and monitoring CBMROOT simulation workflows on a Slurm-managed computing cluster.
+Configure, run, and check CBMROOT transport, digitization, reconstruction, and quality assurance (QA) using Bash scripts. The main entry point, `run_jobs.sh`, supports Slurm submission and concurrent local execution.
 
-The workflow is organized into the usual processing stages:
-
-1. Transport simulation
-2. Digitization
-3. Reconstruction
-4. Quality assurance (QA)
-
-Each stage can be submitted as a Slurm array job. Output from every array task is stored in a task-specific directory, allowing many input files to be processed independently.
+> Real QA requires a project-local `run_qa.C` macro that is not included in this repository. Its aggregate output also differs from the per-task layout expected by QA checking and merging helpers. Read the QA section before selecting that stage.
 
 ## Requirements
 
-- Linux with Bash; Python 3 and PyYAML on the submission host
-- A Slurm workload manager (`sbatch`, `squeue`)
-- A working CBMROOT environment
-- Access to the required input data and cluster storage
-- ROOT for QA macros that use it
+- Linux and Bash; **Bash 5.1 or newer for local mode**, which uses `wait -n -p`.
+- Python 3 and PyYAML on the host running the launcher.
+- `sbatch` and `squeue` for Slurm execution.
+- An installed CBMROOT environment for real processing, with an existing absolute `VMCWORKDIR` ending in `/share/cbmroot` (a trailing slash is accepted).
+- Installed `cbmsim_transport`, `cbmsim_digitization`, and `cbmreco_offline` executables under the installation's `bin/` directory.
+- ROOT's `root` command for reconstruction's prerequisite check and QA; `hadd` for the default QA merger.
+- Standard Linux utilities, including `xargs`, `gzip`, and `grep` for checking results. SSH and `rsync` are needed for remote execution/synchronization.
+- Readable input data and writable output/log storage. Compute nodes must be able to access the project, CBMROOT setup, data, and configuration snapshots.
 
-Edit `default_config.yaml` for your cluster, especially the CBMROOT setup path, input/output directories, and resource limits. It contains all run, transport, digitization, and reconstruction settings. The submission host's `log_dir` must be visible to the compute nodes.
-
-## Basic usage
-
-Make the scripts executable:
+## Quick start
 
 ```bash
+git clone https://github.com/googol23/cbmroot_sbatch.git
+cd cbmroot_sbatch
+python3 -m pip install PyYAML
 chmod +x *.sh *.sbash
+cp default_config.yaml my_run.yaml
 ```
 
-Submit the stages and task range in a run configuration:
+Edit `my_run.yaml` for your installation and storage, then start with two tasks and the three processing stages:
 
 ```bash
-./run_jobs.sh default_config.yaml
+./run_jobs.sh my_run.yaml -t -d -r -j 1-2
 ```
 
-Create another YAML for another batch run. Each file has four top-level mappings: `run`, `transport`, `digitization`, and `reconstruction`. The three stage mappings contain the original contents of `traConfig.yaml`, `rawConfig.yaml`, and `recConfig.yaml`, respectively. Those separate source files are no longer needed for submission.
+This submits Slurm jobs; it does not wait for completion. Monitor the printed job IDs and check processing logs after the jobs finish.
 
-`run_jobs.sh` validates the YAML and writes a unique snapshot under `log_dir/config.*`, including the three stage YAML files passed to CBMROOT. Keep the snapshot until its queued jobs finish. Use distinct `output_dir` values for runs that might overlap.
+## Command-line interface
 
-The original manual CLI remains available:
+```text
+./run_jobs.sh [run_config.yaml] [OPTIONS]
+```
+
+| Option | Meaning |
+| --- | --- |
+| `-t`, `--transport` | Select transport. |
+| `-d`, `--digitization` | Select digitization. |
+| `-r`, `--reconstruction` | Select reconstruction. |
+| `--qa` | Select QA; requires the additional macro described below. |
+| `-j RANGE`, `--jobs RANGE` | Override `run.task_range`. |
+| `--test` | Replace selected stages with `success.sbash`. |
+| `--local` | Execute locally instead of submitting to Slurm. |
+| `-h`, `--help` | Display usage. |
+
+With an explicit YAML and no stage flags, stages come from `run.stages`. Any stage flags replace that list. Execution order is always transport → digitization → reconstruction → QA, regardless of flag or YAML order.
+
+Without an explicit YAML, other settings come from `default_config.yaml`, but stage selection comes from CLI flags. A bare `./run_jobs.sh` selects no stages.
+
+Task selections accept `1`, `1-20`, or `1,3,7-10`. Use ascending ranges and decimal IDs without leading zeros. Array strides (`1-20:2`) and concurrency suffixes (`1-20%4`) are not accepted. Selecting a later stage does not add earlier stages; its inputs must already exist.
+
+## Configuration
+
+Each YAML must contain exactly four top-level, nonempty mappings: `run`, `transport`, `digitization`, and `reconstruction`. All three stage mappings remain required for partial runs and test mode.
+
+Example `run` section, to accompany the stage mappings copied from `default_config.yaml`:
+
+```yaml
+run:
+  stages: [transport, digitization, reconstruction]
+  task_range: "1-2"
+  pipeline_test: false
+  job_name: cbmsim
+  partition: long
+  mem_per_cpu: 16G
+  time: "01:00:00"
+  cbmroot_setup: /path/to/cbmroot/install/bin/CbmRootConfig.sh
+  input_dir: /path/to/generator/root
+  output_dir: /path/to/output/my_run
+  log_dir: /path/to/output/my_run/log
+  setup_tag: sis100_electron
+  nevents: 1
+```
+
+| Required key under `run` | Purpose / requirements |
+| --- | --- |
+| `stages` | Nonempty list without duplicates: `transport`, `digitization`, `reconstruction`, `qa`. |
+| `task_range` | String using the task syntax above; quote numeric-only values. |
+| `pipeline_test` | YAML boolean; CLI `--test` forces `true`. |
+| `job_name` | Slurm job-name prefix; stage suffixes are added. |
+| `partition` | Slurm partition. |
+| `mem_per_cpu` | Slurm memory per CPU, as a string such as `16G`. |
+| `time` | Slurm time-limit string. |
+| `cbmroot_setup` | Absolute setup-script path; must exist as a file outside test mode. |
+| `input_dir` | Absolute generator input directory. |
+| `output_dir` | Absolute processing output directory. |
+| `log_dir` | Absolute scheduler log and configuration snapshot directory. |
+| `setup_tag` | CBMROOT detector setup tag. |
+| `nevents` | Positive integer; passed as `-n` to transport/digitization and `--ntimeslices` to reconstruction. |
+
+Unknown or missing `run` keys are rejected. Except for `stages`, `pipeline_test`, and `nevents`, values must be nonempty strings. Paths support literal `${USER}` substitution, not arbitrary shell expansion. The loader validates stage mappings structurally; CBMROOT validates their detailed settings.
+
+Supplied examples contain installation-specific paths:
+
+- `default_config.yaml`: tasks `1-100`, 999 events, all four stages.
+- `test_config.yaml`: tasks `1-2`, one event, cluster paths.
+- `test_config_local.yaml`: tasks `1-2`, one event, local installation paths; MVD is deactivated in digitization.
+
+Both test configurations set `pipeline_test: false`; they run real processing unless `--test` is supplied. Adapt paths and stage selections before use.
+
+The launcher uses embedded stage mappings, not the separate `traConfig.yaml`, `rawConfig.yaml`, or `recConfig.yaml` references. `innactive_channel_config.yaml` is an additional example and is not automatically loaded.
+
+### Snapshots and overlapping runs
+
+Each launch creates `log_dir/config.*` containing a copy named `run.yaml` and extracted `tra.yaml`, `raw.yaml`, and `rec.yaml`. Jobs receive the resolved settings and file paths through exported environment variables. Keep snapshots and scripts accessible until jobs finish.
+
+The copied `run.yaml` retains the original YAML; CLI overrides are exported rather than written back into that file. Use distinct output and log directories for overlapping runs: processing commands use overwrite options, and QA removes its previous aggregate output before running.
+
+## Slurm execution
+
+Transport, digitization, and reconstruction are arrays using the same task selection. When adjacent stages are selected, `aftercorr` makes each digitization task wait for its corresponding transport task and each reconstruction task wait for its corresponding digitization task.
+
+No direct transport-to-reconstruction dependency is added when digitization is omitted. QA has no reconstruction dependency; see below.
+
+| Stage | Scheduler stdout pattern under `log_dir` |
+| --- | --- |
+| Transport | `%a_%A.tra.log` |
+| Digitization | `%a_%A.dig.log` |
+| Reconstruction | `%a_%A.rec.log` |
+| QA | `%j.qa.log` |
+
+`%a` is the array task ID, `%A` the array job ID, and `%j` the job ID. CBMROOT output is captured separately in the stage logs under `output_dir`.
+
+The final queue summary covers the user's entire Slurm queue. Successful submission does not establish successful processing.
+
+## Local execution
 
 ```bash
-./run_jobs.sh --transport --digitization --reconstruction --jobs 1-20
-./run_jobs.sh custom_config.yaml --transport --jobs 1,3,7-10
+LOCAL_MAX_JOBS=2 ./run_jobs.sh my_run.yaml -t -d -r -j 1-2 --local
 ```
 
-When any stage flag is supplied, those flags replace the YAML stage list. `--jobs` overrides `task_range`; `--test` turns on test mode. A CLI-only call uses the other settings from `default_config.yaml` and submits only the stages named on the CLI. Run `./run_jobs.sh --help` for all options.
+Stages run sequentially within each task; different task pipelines run concurrently. `LOCAL_MAX_JOBS` is a positive integer, defaulting to `4`. It limits pipelines, not application threads. Slurm memory, partition, and time settings do not enforce local resource limits.
 
-For remote submission, the launcher preserves CLI arguments and starts in the
-remote project directory. A configuration inside the local project is mapped to
-the same relative location under the remote project directory, including when
-the launcher is invoked from another working directory. Relative configuration
-paths are resolved against the local working directory; their parent directory
-must exist locally and be inside the project. Configurations outside the project
-must use an absolute path accessible on the submission host, which is forwarded
-unchanged. The configuration must already exist remotely or be copied by the
-optional project synchronization; argument forwarding does not copy files.
+The launcher supplies the job/task environment variables expected by the scripts, waits for local pipelines, and returns `0` when all succeed or `1` when any fails. Real local execution still requires CBMROOT and input data.
 
-Run the remote-forwarding regression tests without SSH, Slurm, or CBMROOT:
+### Pipeline smoke test
+
+```bash
+./run_jobs.sh my_run.yaml -t -d -r -j 1-2 --local --test
+```
+
+`--test` or `pipeline_test: true` replaces selected stages with `success.sbash`, which prints job/task information, sleeps one second, and reports completion. It does not load CBMROOT, process data, produce ROOT files, or create normal stage logs. The configuration must still be valid and `log_dir` writable. Test mode without `--local` still requires Slurm.
+
+## Input and output layout
+
+Task `ID` reads `input_dir/dcmqgsm_ID.root`.
+
+| Stage | Files relative to `output_dir` |
+| --- | --- |
+| Transport | `tra/ID/ID.tra.root`, `tra/ID/ID.par.root`, `tra/ID/transport.log` |
+| Digitization | `raw/ID/ID.digi.root`, `raw/ID/ID.par.root`, `raw/ID/digitization.log` |
+| Reconstruction | `reco/ID/ID.reco.root`, `reco/ID/reconstruction.log` |
+| Aggregate QA | `qa/qa.root`, `qa/qa.log` |
+
+Digitization copies transport parameters into its own task directory. Reconstruction consumes transport output, digitization output, and digitization parameters. Shared setup creates per-task QA directories, but the current QA launcher writes aggregate files.
+
+## Checking results
+
+Use the unified checker for current processing output:
+
+```bash
+./check_jobs.sh --stage tra,raw,reco --detailed --no-color /path/to/output/my_run "1-2"
+```
+
+Checker stage names are `tra`, `raw`, `reco`, and `qa`, or `all` (default). `-j N` controls parallel checks; default `auto` uses available CPUs capped at 16. Put options before the output root and range.
+
+For processing stages, the checker accepts plain and gzip-compressed logs, preferring `.gz` if both exist. It recognizes `Macro finished successfully.` or the appropriate executable-specific message:
+
+| Stage | Additional success message |
+| --- | --- |
+| Transport | `CBM Transport: Program completed successfully; exiting.` |
+| Digitization | `CBM Digitization: Program completed successfully; exiting.` |
+| Reconstruction | `Run: Execution successful` |
+
+Exit codes: `0` for all selected logs passing, `1` for failed/missing logs, and `2` for invalid arguments or checker errors. This checks log messages, not ROOT integrity or scheduler state.
+
+Older `check_tra.sh`, `check_raw.sh`, and `check_rec.sh` support `--detailed`, but require `.log.gz` files and only recognize `Macro finished successfully.` The launcher writes plain logs, so these helpers can report failures for valid current output.
+
+`check_qa.sh` and the unified checker's QA stage expect `qa/ID/ID.qa.log`, not aggregate `qa/qa.log`. Select processing stages explicitly when checking the current launcher's output.
+
+## QA behavior and requirements
+
+`run_qa.sbash` expects `run_qa.C` beside the project scripts and invokes:
+
+```text
+run_qa.C("output_dir", "task_range", "setup_tag", -1)
+```
+
+Supply a compatible macro that creates a nonempty `output_dir/qa/qa.root`; console output goes to `output_dir/qa/qa.log`.
+
+Current scheduling has these limitations:
+
+- Slurm QA is one non-array job with **no dependency on reconstruction**. Launch QA separately after processing completes.
+- Local mode invokes aggregate QA within each selected task pipeline, passing the full range every time. Concurrent pipelines can overwrite the same QA files. For aggregate QA, use a separate invocation with one local task after all inputs exist.
+- QA checking and merging helpers target per-task files and do not directly consume aggregate output.
+
+Pipeline test mode substitutes the smoke-test script and does not validate real QA.
+
+### Merging existing per-task QA files
+
+`merge_qa.sh` expects `qa/ID/ID.qa.log` and `qa/ID/ID.qa.root`. It selects only files with the success marker and a nonempty ROOT file.
+
+```bash
+./merge_qa.sh --list-only --file-list files.txt /path/to/per-task/qa "1-20"
+```
+
+Default merging uses `hadd` with four jobs and writes `<qa_dir>/merged.root`. Options: `-o/--output`, `-j/--jobs`, `-m/--merger`, `-l/--file-list`, and `--list-only`. Custom executables receive `file_list output.root`; ROOT macros receive the same two arguments.
+
+`merge_qa.C` merges only four selected momentum histograms under `CbmCaOutputQa/prim`, as defined in `selectedObjects`; it is not a full-file merger. Failed tasks are excluded, and merging can return success despite exclusions. Inspect the summary and output contents.
+
+## Remote execution and synchronization
+
+On hostnames beginning with `lxi`, nonlocal launches prompt for remote execution on `vae25-virgo4.hpc.gsi.de`, followed by optional synchronization. `--local` bypasses this routing. The check is hostname-based, not a check for Slurm availability.
+
+The remote project path in `run_jobs.sh` is hardcoded to `/lustre/cbm/users/dramirez/slurm_scripts_v3/`; adapt it and the SSH host to your environment.
+
+Arguments are preserved, and execution starts in the remote project directory. Project-local configurations map to the same relative remote location. Relative paths resolve from the caller's working directory, with an existing parent inside the project. External configurations require an absolute path accessible remotely. Argument forwarding alone does not copy files.
+
+`sync.sh [DEST]` uses SSH/rsync to `lustre.hpc.gsi.de`, copying top-level `.sbash`, `.sh`, `.py`, `.yaml`, `.yml`, and `.C` files from the current working directory. Run it from the repository root. Its filters exclude nested directories, tests, and the README; copy nested configurations separately. The launcher's optional synchronization also assumes `sync.sh` is in the current working directory.
+
+## Verification and troubleshooting
+
+Run the regression suite without a real cluster or CBMROOT installation:
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-Task selections generally support Slurm array expressions such as:
+Tests cover smoke-test behavior, remote argument forwarding, and processing-stage failure handling using controlled substitutes for external tools. During this README review of commit `15bdcd919d8bdb514fafeb330991dcf4ff242171`, all **43 tests passed**, and Bash syntax checks passed for all **15 shell scripts**. Real Slurm, CBMROOT, ROOT QA, and remote-cluster processing were not rerun.
 
-```text
-1
-1-20
-1,3,7-10
-```
+For failures, inspect scheduler stdout and stage logs. Check setup-script access, executable paths, generator filenames, upstream input files, and compute-node access to snapshots. A smoke-test success validates orchestration only.
 
-## Checking results
-
-The repository includes helper scripts that inspect stage log files and look for the expected successful-completion message.
-
-Example:
-
-```bash
-./check_tra.sh /path/to/output/tra "1-20"
-```
-
-Where supported, use `--detailed` to print individual successful and failed tasks:
-
-```bash
-./check_rec.sh --detailed /path/to/output/reco "1,3,7-10"
-```
-
-Check scripts return exit code `0` when all requested tasks pass and `1` when a log is missing or a task did not finish successfully. This makes them suitable for use in other scripts.
-
-## Output layout
-
-A typical output tree is:
-
-```text
-output/
-├── tra/<task-id>/
-├── raw/<task-id>/
-├── reco/<task-id>/
-└── qa/<task-id>/
-```
-
-Each directory contains the data, parameter, and log files produced for that task and processing stage.
-
-## Configuration
-
-Before running the pipeline, review at least:
-
-- CBMROOT environment setup path
-- Input and output directories
-- Central configuration (`default_config.yaml`), including all three CBMROOT stages
-- Detector setup tag
-- Number of events
-- Slurm partition, memory, and time limits
-- Executable and macro paths
-
-Some QA paths may be placeholders while the corresponding macros are under development.
-
-## Notes
-
-- Submit scripts through Slurm so that variables such as `SLURM_JOB_ID` and `SLURM_ARRAY_TASK_ID` are available.
-- Later stages expect output and parameter files from earlier stages.
-- Verify the configured paths before launching large arrays.
-- Test with a small task range before a full production run.
+`run_test.sh` is a legacy hardcoded transport experiment with digitization/reconstruction commands commented out. Use `run_jobs.sh --test` for the maintained pipeline smoke test.
 
 ## License
 
-No license is specified. Add one if the repository is intended for redistribution or external reuse.
+No license file is included in the reviewed repository.
