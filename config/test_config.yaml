@@ -7,7 +7,8 @@ remote:
   snapshot_root: /lustre/cbm/users/${USER}/
 
 run:
-  stages: [transport, digitization, reconstruction, qa]
+  # stages: [transport, digitization, reconstruction, qa]
+  stages: [qa]
   task_range: "1-2"
   pipeline_test: false
   job_name: cbmsim

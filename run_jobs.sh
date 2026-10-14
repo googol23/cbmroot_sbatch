@@ -288,8 +288,12 @@ if [[ "$QA_MODE" != full && "$QA_MODE" != per_step && "$QA_MODE" != both ]]; the
     exit 2
 fi
 RUN_STEP_QA=false
+RUN_STANDALONE_STEP_QA=false
 if [[ "$QA_MODE" == per_step || "$QA_MODE" == both ]]; then
     RUN_STEP_QA=true
+fi
+if "$RUN_QA" && ! "$RUN_TRA" && ! "$RUN_DIG" && ! "$RUN_REC" && "$RUN_STEP_QA"; then
+    RUN_STANDALONE_STEP_QA=true
 fi
 if [[ "$QA_MODE" == per_step ]]; then
     RUN_QA=false
@@ -418,6 +422,18 @@ if "$local_mode"; then
                 fi
             fi
 
+            if "$RUN_STANDALONE_STEP_QA"; then
+                echo "[local:${task_id}] Starting Transport QA from existing output"
+                "${SCRIPT_DIR}/sbash/${tra_qa_exe}" ||
+                    echo "[local:${task_id}] WARNING: Transport QA failed" >&2
+                echo "[local:${task_id}] Starting Digitization QA from existing output"
+                "${SCRIPT_DIR}/sbash/${raw_qa_exe}" ||
+                    echo "[local:${task_id}] WARNING: Digitization QA failed" >&2
+                echo "[local:${task_id}] Starting Reconstruction QA from existing output"
+                "${SCRIPT_DIR}/sbash/${rec_qa_exe}" ||
+                    echo "[local:${task_id}] WARNING: Reconstruction QA failed" >&2
+            fi
+
             echo "============================================================"
             echo "Local task ${task_id} completed"
             echo "============================================================"
@@ -435,6 +451,7 @@ if "$local_mode"; then
     echo "Reconstruction:      $RUN_REC"
     echo "Full-chain QA:       $RUN_QA"
     echo "Per-step QA:         $RUN_STEP_QA"
+    echo "QA existing output:  $RUN_STANDALONE_STEP_QA"
     echo "================================================="
 
     declare -A local_pids=()
@@ -613,6 +630,26 @@ if "$RUN_REC"; then
         echo "Stage Reconstruction QA: $rec_qa_id"
         submitted_job_ids+=("$rec_qa_id")
     fi
+fi
+
+if "$RUN_STANDALONE_STEP_QA"; then
+    tra_qa_id=$(sbatch --parsable \
+        "${tra_qa_clpars[@]}" \
+        "${SCRIPT_DIR}/sbash/$tra_qa_exe")
+    echo "Stage Transport QA (existing output): $tra_qa_id"
+    submitted_job_ids+=("$tra_qa_id")
+
+    raw_qa_id=$(sbatch --parsable \
+        "${raw_qa_clpars[@]}" \
+        "${SCRIPT_DIR}/sbash/$raw_qa_exe")
+    echo "Stage Digitization QA (existing output): $raw_qa_id"
+    submitted_job_ids+=("$raw_qa_id")
+
+    rec_qa_id=$(sbatch --parsable \
+        "${rec_qa_clpars[@]}" \
+        "${SCRIPT_DIR}/sbash/$rec_qa_exe")
+    echo "Stage Reconstruction QA (existing output): $rec_qa_id"
+    submitted_job_ids+=("$rec_qa_id")
 fi
 
 if "$RUN_QA"; then

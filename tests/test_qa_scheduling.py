@@ -99,6 +99,44 @@ class QaSchedulingTests(unittest.TestCase):
         self.assertFalse(any(arg.startswith("--dependency=") for arg in calls[0]))
         self.assertIn("--job-name=cbmsim_qa", calls[0])
 
+    def test_qa_only_per_step_mode_uses_existing_stage_outputs(self):
+        self.config["run"]["stages"] = ["qa"]
+        self.config_path.write_text(yaml.safe_dump(self.config))
+        calls = self.run_launcher("per_step")
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(
+            [[arg for arg in call if arg.startswith("--job-name=")] for call in calls],
+            [
+                ["--job-name=cbmsim_tra.qa"],
+                ["--job-name=cbmsim_dig.qa"],
+                ["--job-name=cbmsim_rec.qa"],
+            ],
+        )
+        self.assertTrue(all(any(arg == "--array=1-2" for arg in call) for call in calls))
+        self.assertFalse(any(
+            arg.startswith("--dependency=")
+            for call in calls for arg in call
+        ))
+
+    def test_qa_only_both_mode_submits_step_and_full_qa(self):
+        self.config["run"]["stages"] = ["qa"]
+        self.config_path.write_text(yaml.safe_dump(self.config))
+        calls = self.run_launcher("both")
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(
+            [next(arg for arg in call if arg.startswith("--job-name=")) for call in calls],
+            [
+                "--job-name=cbmsim_tra.qa",
+                "--job-name=cbmsim_dig.qa",
+                "--job-name=cbmsim_rec.qa",
+                "--job-name=cbmsim_qa",
+            ],
+        )
+        self.assertFalse(any(
+            arg.startswith("--dependency=")
+            for call in calls for arg in call
+        ))
+
     def test_snapshot_run_submits_afterany_cleanup(self):
         self.config["run"]["stages"] = ["qa"]
         self.config["qa"]["mode"] = "full"
