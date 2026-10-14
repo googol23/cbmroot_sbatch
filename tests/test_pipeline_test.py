@@ -58,8 +58,10 @@ class PipelineTestMode(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         settings = dict(line.split("\t", 1) for line in result.stdout.splitlines())
         self.assertEqual(settings["CFG_PIPELINE_TEST"], "true")
+        self.assertEqual(yaml.safe_load(Path(settings["CFG_QA_CONFIG"]).read_text()),
+                         self.config["qa"])
         for key in ("CFG_RUN_CONFIG", "CFG_TRA_CONFIG",
-                    "CFG_RAW_CONFIG", "CFG_REC_CONFIG"):
+                    "CFG_RAW_CONFIG", "CFG_REC_CONFIG", "CFG_QA_CONFIG"):
             self.assertTrue(Path(settings[key]).is_file(), key)
         self.assertFalse(Path(self.config["run"]["cbmroot_setup"]).exists())
 
@@ -103,6 +105,26 @@ class PipelineTestMode(unittest.TestCase):
         result = self.load_config("--test")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("pipeline_test must be true or false", result.stderr)
+
+    def test_qa_block_is_required(self):
+        self.config.pop("qa")
+        result = self.load_config("--test")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("expected run, transport, digitization, reconstruction, and qa mappings", result.stderr)
+
+    def test_all_qa_modes_are_accepted(self):
+        for mode in ("full", "per_step", "both"):
+            with self.subTest(mode=mode):
+                self.config["qa"]["mode"] = mode
+                result = self.load_config("--test")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"CFG_QA_MODE\t{mode}\n", result.stdout)
+
+    def test_invalid_qa_mode_is_rejected(self):
+        self.config["qa"]["mode"] = "sometimes"
+        result = self.load_config("--test")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("qa.mode must be one of", result.stderr)
 
     def test_test_mode_still_rejects_invalid_event_count(self):
         self.config["run"]["nevents"] = 0

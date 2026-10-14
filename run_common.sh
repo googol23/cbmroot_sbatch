@@ -87,6 +87,7 @@ TASK_ID="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is not defined. Run this scr
 : "${CFG_TRA_CONFIG:?Missing transport configuration}"
 : "${CFG_RAW_CONFIG:?Missing digitization configuration}"
 : "${CFG_REC_CONFIG:?Missing reconstruction configuration}"
+: "${CFG_QA_CONFIG:?Missing QA configuration}"
 : "${CFG_SETUP_TAG:?Missing setup tag}"
 : "${CFG_NEVENTS:?Missing event count}"
 
@@ -124,6 +125,7 @@ log "CBMROOT_DIR: ${CBMROOT_DIR}"
 TRA_CONFIG_FILE="$CFG_TRA_CONFIG"
 RAW_CONFIG_FILE="$CFG_RAW_CONFIG"
 REC_CONFIG_FILE="$CFG_REC_CONFIG"
+QA_CONFIG_FILE="$CFG_QA_CONFIG"
 
 ROOT="root -l -q -b"
 

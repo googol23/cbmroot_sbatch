@@ -34,6 +34,7 @@ BLOCKS = {
     "transport": ("tra.yaml", "CFG_TRA_CONFIG"),
     "digitization": ("raw.yaml", "CFG_RAW_CONFIG"),
     "reconstruction": ("rec.yaml", "CFG_REC_CONFIG"),
+    "qa": ("qa.yaml", "CFG_QA_CONFIG"),
 }
 
 
@@ -48,7 +49,7 @@ def validate(path, pipeline_test_override=False):
     except (OSError, yaml.YAMLError) as exc:
         fail(f"{path}: {exc}")
     if not isinstance(config, dict) or set(config) != {"run", *BLOCKS}:
-        fail("expected run, transport, digitization, and reconstruction mappings")
+        fail("expected run, transport, digitization, reconstruction, and qa mappings")
     run = config["run"]
     if not isinstance(run, dict):
         fail("run must be a mapping")
@@ -64,7 +65,16 @@ def validate(path, pipeline_test_override=False):
     ) or len(stages) != len(set(stages)):
         fail("run.stages must be a nonempty list without duplicates from: "
              "transport, digitization, reconstruction, qa")
-    settings = {"CFG_STAGES": ",".join(stages)}
+    qa = config["qa"]
+    if not isinstance(qa, dict) or not qa:
+        fail("qa must be a nonempty YAML mapping")
+    qa_mode = qa.get("mode")
+    if qa_mode not in {"full", "per_step", "both"}:
+        fail("qa.mode must be one of: full, per_step, both")
+    settings = {
+        "CFG_STAGES": ",".join(stages),
+        "CFG_QA_MODE": qa_mode,
+    }
     for field, variable in FIELDS.items():
         value = run[field]
         if field == "pipeline_test":

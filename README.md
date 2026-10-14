@@ -44,7 +44,8 @@ This submits Slurm jobs; it does not wait for completion. Monitor the printed jo
 | `-t`, `--transport` | Select transport. |
 | `-d`, `--digitization` | Select digitization. |
 | `-r`, `--reconstruction` | Select reconstruction. |
-| `--qa` | Select QA; requires the additional macro described below. |
+| `--qa` | Select full-chain QA; requires `run_qa.C`. |
+| `--qa-mode MODE` | Select `full`, `per_step`, or `both` QA behavior. |
 | `-j RANGE`, `--jobs RANGE` | Override `run.task_range`. |
 | `--test` | Replace selected stages with `success.sbash`. |
 | `--local` | Execute locally instead of submitting to Slurm. |
@@ -58,7 +59,7 @@ Task selections accept `1`, `1-20`, or `1,3,7-10`. Use ascending ranges and deci
 
 ## Configuration
 
-Each YAML must contain exactly four top-level, nonempty mappings: `run`, `transport`, `digitization`, and `reconstruction`. All three stage mappings remain required for partial runs and test mode.
+Each YAML must contain exactly five top-level, nonempty mappings: `run`, `transport`, `digitization`, `reconstruction`, and `qa`. All four stage mappings remain required for partial runs and test mode.
 
 Example `run` section, to accompany the stage mappings copied from `default_config.yaml`:
 
@@ -84,6 +85,7 @@ run:
 | `stages` | Nonempty list without duplicates: `transport`, `digitization`, `reconstruction`, `qa`. |
 | `task_range` | String using the task syntax above; quote numeric-only values. |
 | `pipeline_test` | YAML boolean; CLI `--test` forces `true`. |
+
 | `job_name` | Slurm job-name prefix; stage suffixes are added. |
 | `partition` | Slurm partition. |
 | `mem_per_cpu` | Slurm memory per CPU, as a string such as `16G`. |
@@ -96,6 +98,15 @@ run:
 | `nevents` | Positive integer; passed as `-n` to transport/digitization and `--ntimeslices` to reconstruction. |
 
 Unknown or missing `run` keys are rejected. Except for `stages`, `pipeline_test`, and `nevents`, values must be nonempty strings. Paths support literal `${USER}` substitution, not arbitrary shell expansion. The loader validates stage mappings structurally; CBMROOT validates their detailed settings.
+
+### `qa`
+
+```yaml
+qa:
+  mode: full
+```
+
+`qa.mode` is required and accepts `full`, `per_step`, or `both`. The complete `qa` mapping is staged as `qa.yaml` and exported to jobs as `CFG_QA_CONFIG`, matching `CFG_TRA_CONFIG`, `CFG_RAW_CONFIG`, and `CFG_REC_CONFIG`. Additional QA binary settings can therefore be added to this block later without changing the pipeline's configuration structure.
 
 Supplied examples contain installation-specific paths:
 
@@ -117,14 +128,17 @@ The copied `run.yaml` retains the original YAML; CLI overrides are exported rath
 
 Transport, digitization, and reconstruction are arrays using the same task selection. When adjacent stages are selected, `aftercorr` makes each digitization task wait for its corresponding transport task and each reconstruction task wait for its corresponding digitization task.
 
-No direct transport-to-reconstruction dependency is added when digitization is omitted. QA has no reconstruction dependency; see below.
+No direct transport-to-reconstruction dependency is added when digitization is omitted. In `full` or `both` mode, aggregate QA uses `afterok` and starts only after every selected simulation array finishes successfully. In `per_step` or `both` mode, each selected simulation array spawns a corresponding QA array with `aftercorr`; these QA arrays do not gate downstream simulation stages.
 
 | Stage | Scheduler stdout pattern under `log_dir` |
 | --- | --- |
 | Transport | `%a_%A.tra.log` |
 | Digitization | `%a_%A.dig.log` |
 | Reconstruction | `%a_%A.rec.log` |
-| QA | `%j.qa.log` |
+| Per-step transport QA | `%a_%A.tra.qa.log` |
+| Per-step digitization QA | `%a_%A.dig.qa.log` |
+| Per-step reconstruction QA | `%a_%A.rec.qa.log` |
+| Full-chain QA | `%j.qa.log` |
 
 `%a` is the array task ID, `%A` the array job ID, and `%j` the job ID. CBMROOT output is captured separately in the stage logs under `output_dir`.
 
@@ -157,9 +171,19 @@ Task `ID` reads `input_dir/dcmqgsm_ID.root`.
 | Transport | `tra/ID/ID.tra.root`, `tra/ID/ID.par.root`, `tra/ID/transport.log` |
 | Digitization | `raw/ID/ID.digi.root`, `raw/ID/ID.par.root`, `raw/ID/digitization.log` |
 | Reconstruction | `rec/ID/ID.reco.root`, `rec/ID/reconstruction.log` |
+| Per-step QA | `qa/ID/ID.tra.qa.root`, `ID.digi.qa.root`, `ID.reco.qa.root` and matching logs |
 | Aggregate QA | `qa/qa.root`, `qa/qa.log` |
 
-Digitization copies transport parameters into its own task directory. Reconstruction consumes transport output, digitization output, and digitization parameters. Shared setup creates per-task QA directories, but the current QA launcher writes aggregate files.
+Digitization copies transport parameters into its own task directory. Reconstruction consumes transport output, digitization output, and digitization parameters. Full-chain QA consumes the completed task range. Per-step QA writes beneath each task's `qa/ID` directory.
+
+Per-step launchers are `run_tra_qa.sbash`, `run_raw_qa.sbash`, and `run_rec_qa.sbash`. They expect project-local macros named `run_tra_qa.C`, `run_raw_qa.C`, and `run_rec_qa.C`, each with this interface:
+
+```cpp
+void run_STAGE_qa(TString outputDir, Int_t taskId, TString setup,
+                  Int_t nEvents, TString qaOutput);
+```
+
+This gives each macro the pipeline output root and task ID so it can locate all required stage inputs, while requiring its result to be written under `QA_OUT_DIR`.
 
 ## Checking results
 

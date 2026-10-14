@@ -10,7 +10,8 @@ Usage: ./run_jobs.sh [run_config.yaml] [OPTIONS]
   -t, --transport       Submit/run transport
   -d, --digitization    Submit/run digitization
   -r, --reconstruction  Submit/run reconstruction
-      --qa              Submit/run QA
+      --qa              Select full-chain QA
+      --qa-mode MODE    QA mode: full, per_step, or both
   -j, --jobs RANGE      Slurm/local task range
       --test            Run the success test script instead
       --local           Run jobs locally instead of submitting to Slurm
@@ -27,7 +28,7 @@ Examples:
   ./run_jobs.sh config.yaml -t -d -r
   ./run_jobs.sh config.yaml -t -d -r -j 1-5
   ./run_jobs.sh config.yaml -t -d -r -j 1-5 --local
-  LOCAL_MAX_JOBS=2 ./run_jobs.sh config.yaml -t -d -r -j 1-10 --local
+  30	  LOCAL_MAX_JOBS=2 ./run_jobs.sh config.yaml -t -d -r -j 1-10 --local
 EOF
 }
 
@@ -46,6 +47,7 @@ config_file=""
 config_arg_index=""
 declare -a selected_stages=()
 jobs_override=""
+qa_mode_override=""
 test_override=false
 local_mode=false
 
@@ -66,6 +68,14 @@ while (( $# )); do
         --qa)
             selected_stages+=(qa)
             shift
+            ;;
+        --qa-mode)
+            if (( $# < 2 )); then
+                echo "$1 requires one of: full, per_step, both" >&2
+                exit 2
+            fi
+            qa_mode_override="$2"
+            shift 2
             ;;
         --test)
             test_override=true
@@ -233,6 +243,18 @@ fi
 # ---------------------------------------------------------------------------
 # The loader resolves YAML settings and the CLI test override.
 PIPELINE_TEST="$CFG_PIPELINE_TEST"
+QA_MODE="${qa_mode_override:-$CFG_QA_MODE}"
+if [[ "$QA_MODE" != full && "$QA_MODE" != per_step && "$QA_MODE" != both ]]; then
+    echo "Invalid QA mode: $QA_MODE (expected full, per_step, or both)" >&2
+    exit 2
+fi
+RUN_STEP_QA=false
+if [[ "$QA_MODE" == per_step || "$QA_MODE" == both ]]; then
+    RUN_STEP_QA=true
+fi
+if [[ "$QA_MODE" == per_step ]]; then
+    RUN_QA=false
+fi
 
 # ---------------------------------------------------------------------------
 # Common configuration
@@ -247,11 +269,17 @@ if "$PIPELINE_TEST"; then
     raw_exe=success.sbash
     rec_exe=success.sbash
     qa_exe=success.sbash
+    tra_qa_exe=success.sbash
+    raw_qa_exe=success.sbash
+    rec_qa_exe=success.sbash
 else
     tra_exe=run_tra.sbash
     raw_exe=run_raw.sbash
     rec_exe=run_rec.sbash
     qa_exe=run_qa.sbash
+    tra_qa_exe=run_tra_qa.sbash
+    raw_qa_exe=run_raw_qa.sbash
+    rec_qa_exe=run_rec_qa.sbash
 fi
 
 # ===========================================================================
@@ -322,24 +350,33 @@ if "$local_mode"; then
                 echo "[local:${task_id}] Starting Transport"
                 "${SCRIPT_DIR}/${tra_exe}"
                 echo "[local:${task_id}] Transport completed"
+                if "$RUN_STEP_QA"; then
+                    echo "[local:${task_id}] Starting Transport QA"
+                    "${SCRIPT_DIR}/${tra_qa_exe}" ||
+                        echo "[local:${task_id}] WARNING: Transport QA failed" >&2
+                fi
             fi
 
             if "$RUN_DIG"; then
                 echo "[local:${task_id}] Starting Digitization"
                 "${SCRIPT_DIR}/${raw_exe}"
                 echo "[local:${task_id}] Digitization completed"
+                if "$RUN_STEP_QA"; then
+                    echo "[local:${task_id}] Starting Digitization QA"
+                    "${SCRIPT_DIR}/${raw_qa_exe}" ||
+                        echo "[local:${task_id}] WARNING: Digitization QA failed" >&2
+                fi
             fi
 
             if "$RUN_REC"; then
                 echo "[local:${task_id}] Starting Reconstruction"
                 "${SCRIPT_DIR}/${rec_exe}"
                 echo "[local:${task_id}] Reconstruction completed"
-            fi
-
-            if "$RUN_QA"; then
-                echo "[local:${task_id}] Starting QA"
-                "${SCRIPT_DIR}/${qa_exe}"
-                echo "[local:${task_id}] QA completed"
+                if "$RUN_STEP_QA"; then
+                    echo "[local:${task_id}] Starting Reconstruction QA"
+                    "${SCRIPT_DIR}/${rec_qa_exe}" ||
+                        echo "[local:${task_id}] WARNING: Reconstruction QA failed" >&2
+                fi
             fi
 
             echo "============================================================"
@@ -357,7 +394,8 @@ if "$local_mode"; then
     echo "Transport:           $RUN_TRA"
     echo "Digitization:        $RUN_DIG"
     echo "Reconstruction:      $RUN_REC"
-    echo "QA:                  $RUN_QA"
+    echo "Full-chain QA:       $RUN_QA"
+    echo "Per-step QA:         $RUN_STEP_QA"
     echo "================================================="
 
     declare -A local_pids=()
@@ -406,6 +444,21 @@ if "$local_mode"; then
         wait_for_one
     done
 
+    if "$RUN_QA" && (( local_failures == 0 )); then
+        echo "Starting full-chain QA after all local simulation tasks"
+        if (
+            export SLURM_JOB_ID="local_qa_${BASHPID}"
+            unset SLURM_ARRAY_TASK_ID
+            "${SCRIPT_DIR}/${qa_exe}"
+        ); then
+            echo "Full-chain QA completed"
+        else
+            qa_status=$?
+            echo "Full-chain QA failed with exit code ${qa_status}" >&2
+            ((local_failures += 1))
+        fi
+    fi
+
     echo
     echo "================ Local Summary =================="
 
@@ -443,6 +496,9 @@ build_clpars() {
 build_clpars tra_clpars tra
 build_clpars raw_clpars dig
 build_clpars rec_clpars rec
+build_clpars tra_qa_clpars tra.qa
+build_clpars raw_qa_clpars dig.qa
+build_clpars rec_qa_clpars rec.qa
 
 qa_clpars=(
     "--partition=$partition"
@@ -458,14 +514,24 @@ qa_clpars=(
 # Submit Slurm jobs
 # ---------------------------------------------------------------------------
 
+declare -a full_qa_dependencies=()
+
 if "$RUN_TRA"; then
     tra_id=$(sbatch --parsable \
         "${tra_clpars[@]}" \
         "${SCRIPT_DIR}/$tra_exe")
 
     echo "Stage Transport: $tra_id"
+    full_qa_dependencies+=("$tra_id")
 
     raw_clpars+=("--dependency=aftercorr:$tra_id")
+    if "$RUN_STEP_QA"; then
+        tra_qa_id=$(sbatch --parsable \
+            "${tra_qa_clpars[@]}" \
+            "--dependency=aftercorr:$tra_id" \
+            "${SCRIPT_DIR}/$tra_qa_exe")
+        echo "Stage Transport QA: $tra_qa_id"
+    fi
 fi
 
 if "$RUN_DIG"; then
@@ -474,8 +540,16 @@ if "$RUN_DIG"; then
         "${SCRIPT_DIR}/$raw_exe")
 
     echo "Stage Digitization: $raw_id"
+    full_qa_dependencies+=("$raw_id")
 
     rec_clpars+=("--dependency=aftercorr:$raw_id")
+    if "$RUN_STEP_QA"; then
+        raw_qa_id=$(sbatch --parsable \
+            "${raw_qa_clpars[@]}" \
+            "--dependency=aftercorr:$raw_id" \
+            "${SCRIPT_DIR}/$raw_qa_exe")
+        echo "Stage Digitization QA: $raw_qa_id"
+    fi
 fi
 
 if "$RUN_REC"; then
@@ -484,9 +558,22 @@ if "$RUN_REC"; then
         "${SCRIPT_DIR}/$rec_exe")
 
     echo "Stage Reconstruction: $rec_id"
+    full_qa_dependencies+=("$rec_id")
+
+    if "$RUN_STEP_QA"; then
+        rec_qa_id=$(sbatch --parsable \
+            "${rec_qa_clpars[@]}" \
+            "--dependency=aftercorr:$rec_id" \
+            "${SCRIPT_DIR}/$rec_qa_exe")
+        echo "Stage Reconstruction QA: $rec_qa_id"
+    fi
 fi
 
 if "$RUN_QA"; then
+    if (( ${#full_qa_dependencies[@]} > 0 )); then
+        full_qa_dependency=$(IFS=:; echo "${full_qa_dependencies[*]}")
+        qa_clpars+=("--dependency=afterok:$full_qa_dependency")
+    fi
     qa_id=$(sbatch --parsable \
         "${qa_clpars[@]}" \
         "${SCRIPT_DIR}/$qa_exe")

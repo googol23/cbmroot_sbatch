@@ -77,7 +77,7 @@ class StageFailureTests(unittest.TestCase):
             H7_TRACE=str(self.trace),
         )
         for stage, key in [("tra", "CFG_TRA_CONFIG"), ("raw", "CFG_RAW_CONFIG"),
-                           ("rec", "CFG_REC_CONFIG")]:
+                           ("rec", "CFG_REC_CONFIG"), ("qa", "CFG_QA_CONFIG")]:
             config = self.root / (stage + ".yaml")
             config.write_text("fixture: true\n")
             self.env[key] = str(config)

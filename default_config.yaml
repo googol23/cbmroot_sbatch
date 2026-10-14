@@ -4,6 +4,7 @@ run:
   stages: [transport, digitization, reconstruction, qa]
   task_range: "1-100"
   pipeline_test: false
+
   job_name: cbmsim
   partition: long
   mem_per_cpu: 64G
@@ -105,3 +106,6 @@ reconstruction:
   littrack:
     trackingType: branch
     mergingType: nearest_hit
+
+qa:
+  mode: full # full, per_step, or both

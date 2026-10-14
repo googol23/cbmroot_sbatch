@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+: "${CBM_RUN_DIR:?CBM_RUN_DIR is not defined. Submit through run_jobs.sh}"
+SCRIPT_DIR="$CBM_RUN_DIR"
+if source "${SCRIPT_DIR}/run_common.sh"; then
+  :
+else
+  status=$?
+  printf 'Failed to load pipeline setup (exit %s): %s\n' \
+    "$status" "${SCRIPT_DIR}/run_common.sh" >&2
+  exit "$status"
+fi
+
+QA_STEP_MACRO="${SCRIPT_DIR}/run_raw_qa.C"
+QA_STEP_OUTPUT="${QA_OUT_DIR}/${TASK_ID}.digi.qa.root"
+QA_STEP_LOG="${QA_OUT_DIR}/${TASK_ID}.digi.qa.log"
+
+require_file "$DIGITIZATION_OUTPUT" "Digitization output file"
+require_file "$DIGITIZATION_PARMET" "Digitization parameter file"
+require_file "$QA_STEP_MACRO" "Digitization QA macro"
+require_command root
+
+qa_call="${QA_STEP_MACRO}(\"${OUTPUT_DIR}\",${TASK_ID},\"${SETUP_TAG}\",${NEVENTS},\"${QA_STEP_OUTPUT}\")"
+log "Starting digitization QA: ${QA_STEP_OUTPUT}"
+run_logged_command "$QA_STEP_LOG" root -l -q -b "$qa_call"
+require_file "$QA_STEP_OUTPUT" "Digitization QA output"
+log "Digitization QA finished: ${QA_STEP_OUTPUT}"

@@ -105,3 +105,6 @@ reconstruction:
   littrack:
     trackingType: branch
     mergingType: nearest_hit
+
+qa:
+  mode: full # full, per_step, or both
