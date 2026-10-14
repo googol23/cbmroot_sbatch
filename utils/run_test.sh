@@ -51,7 +51,7 @@ TASK_ID="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is not defined. Submit this 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-source /lustre/cbm/users/dramirez/CBMROOT_260630/install/bin/CbmRootConfig.sh -o
+source /lustre/cbm/users/dramirez/CBMROOT_260630/install/bin/CbmRootConfig.sh -o # TODO: replace by default cbmroot configuration
 INPUT_DIR="/lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root"
 OUTPUT_DIR="/lustre/cbm/users/${USER}/mc/out"
 CONFIG_FILE="/lustre/cbm/users/${USER}/slurm_scripts/config/traConfig.yaml"

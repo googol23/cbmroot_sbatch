@@ -133,7 +133,7 @@ fi
 if ! "$local_mode"; then
   if [[ "$(hostname)" == "lxi"* ]]; then
     remote_exec_warning
-    SYNC_ROOT=/lustre/cbm/users/dramirez/slurm_scripts_v3
+    SYNC_ROOT=/lustre/cbm/users/${USER}/slurm_scripts_v3
     snapshot_id="${CBM_SNAPSHOT_ID:-}"
     if [[ -z "$snapshot_id" ]]; then
       printf -v snapshot_id '%(%Y%m%dT%H%M%S)T-%s' -1 "$$"

@@ -15,7 +15,6 @@ run:
   setup_tag: sis100_electron
   nevents: 1
 
-
 transport:
   global:
     collisionSystem: Au+Au
