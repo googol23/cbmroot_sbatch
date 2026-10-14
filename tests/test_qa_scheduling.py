@@ -27,7 +27,7 @@ class QaSchedulingTests(unittest.TestCase):
         self.trace = self.root / "sbatch.jsonl"
         self.setup = self.root / "setup.sh"
         self.setup.write_text(":\n")
-        self.config = yaml.safe_load((PROJECT / "default_config.yaml").read_text())
+        self.config = yaml.safe_load((PROJECT / "config/default_config.yaml").read_text())
         self.config["run"].update(
             stages=["transport", "digitization", "reconstruction", "qa"],
             task_range="1-2",
@@ -81,6 +81,16 @@ class QaSchedulingTests(unittest.TestCase):
         self.assertEqual(dependencies[4], ["--dependency=aftercorr:3"])
         self.assertEqual(dependencies[5], ["--dependency=aftercorr:5"])
         self.assertEqual(dependencies[6], ["--dependency=afterok:1:3:5"])
+
+    def test_qa_only_full_mode_submits_one_non_array_job(self):
+        self.config["run"]["stages"] = ["qa"]
+        self.config["qa"]["mode"] = "full"
+        self.config_path.write_text(yaml.safe_dump(self.config))
+        calls = self.run_launcher("full")
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(any(arg.startswith("--array=") for arg in calls[0]))
+        self.assertFalse(any(arg.startswith("--dependency=") for arg in calls[0]))
+        self.assertIn("--job-name=cbmsim_qa", calls[0])
 
     def test_per_step_mode_does_not_submit_full_qa(self):
         self.config["qa"]["mode"] = "per_step"

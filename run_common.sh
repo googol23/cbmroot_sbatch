@@ -135,12 +135,12 @@ RECONSTRUCTION_BIN="${CBMROOT_DIR}/bin/cbmreco_offline"
 
 RECONSTRUCTION_MACRO="${VMCWORKDIR}/macro/run/run_reco.C"
 
-QA_TRANSPORT_MACRO="${CBMROOT_DIR}/macro/run/run_qaTra.C"
-QA_DIGITIZATION_MACRO="${CBMROOT_DIR}/macro/TODO"
-QA_RECONSTRUCTION_MACRO="${CBMROOT_DIR}/macro/TODO"
-QA_SUMMARY_MACRO="${CBMROOT_DIR}/macro/TODO"
+QA_TRANSPORT_MACRO="${CBM_RUN_DIR}/macros/run_tra_qa.C"
+QA_DIGITIZATION_MACRO="${CBM_RUN_DIR}/macros/run_raw_qa.C"
+QA_RECONSTRUCTION_MACRO="${CBM_RUN_DIR}/macros/run_rec_qa.C"
+QA_SUMMARY_MACRO="${CBM_RUN_DIR}/macros/run_qa.C"
 
-QA_MACRO="${VMCWORKDIR}/macro/run/run_qa.C"
+QA_MACRO="${CBM_RUN_DIR}/macros/run_qa.C"
 
 # ---------------------------------------------------------------------------
 # Input and output files

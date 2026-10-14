@@ -26,8 +26,10 @@ class StageFailureTests(unittest.TestCase):
         self.root = Path(workspace.name)
         self.project = self.root / "pipeline scripts"
         self.project.mkdir()
-        for name in ["run_common.sh", *(item[0] for item in STAGES.values())]:
-            shutil.copy2(PROJECT / name, self.project / name)
+        (self.project / "sbash").mkdir()
+        shutil.copy2(PROJECT / "run_common.sh", self.project / "run_common.sh")
+        for name in (item[0] for item in STAGES.values()):
+            shutil.copy2(PROJECT / "sbash" / name, self.project / "sbash" / name)
         self.install = self.root / "CBMROOT install"
         self.vmc = self.install / "share" / "cbmroot"
         self.vmc.mkdir(parents=True)
@@ -89,7 +91,7 @@ class StageFailureTests(unittest.TestCase):
 
     def run_stage(self, stage):
         return subprocess.run(
-            ["bash", str(self.project / STAGES[stage][0])],
+            ["bash", str(self.project / "sbash" / STAGES[stage][0])],
             env=self.env, text=True, capture_output=True, timeout=5,
         )
 

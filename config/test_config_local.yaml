@@ -108,6 +108,6 @@ reconstruction:
     mergingType: nearest_hit
 
 qa:
-  mode: full
+  # mode: full
   # mode: per_step
-  # mode: or both
+  mode: or both

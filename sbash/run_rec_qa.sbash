@@ -12,7 +12,7 @@ else
   exit "$status"
 fi
 
-QA_STEP_MACRO="${SCRIPT_DIR}/run_rec_qa.C"
+QA_STEP_MACRO="${CBM_RUN_DIR}/macros/run_rec_qa.C"
 QA_STEP_OUTPUT="${QA_OUT_DIR}/${TASK_ID}.reco.qa.root"
 QA_STEP_LOG="${QA_OUT_DIR}/${TASK_ID}.reco.qa.log"
 

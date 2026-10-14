@@ -14,9 +14,9 @@ set +u
 source "$CFG_CBMROOT_SETUP" -o
 set -u
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-CBM_RUN_DIR="${CBM_RUN_DIR:-$SCRIPT_DIR}"
-QA_MACRO="${CBM_RUN_DIR}/run_qa.C"
+SBATCH_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+CBM_RUN_DIR="${CBM_RUN_DIR:-$(cd -- "${SBATCH_DIR}/.." && pwd -P)}"
+QA_MACRO="${CBM_RUN_DIR}/macros/run_qa.C"
 
 OUTPUT_DIR="$CFG_OUTPUT_DIR"
 QA_OUT_DIR="${OUTPUT_DIR}/qa"

@@ -88,6 +88,14 @@ class RemoteArgumentsTest(unittest.TestCase):
     def test_no_arguments_does_not_add_a_config(self):
         self.assert_forwarded([], [])
 
+    def test_config_basename_resolves_to_config_directory(self):
+        config_dir = self.project / "config"
+        config_dir.mkdir()
+        (config_dir / "test_config.yaml").write_text("run: fixture\n")
+        args = ["test_config.yaml"]
+        expected = [REMOTE_PROJECT + "/config/test_config.yaml"]
+        self.assert_forwarded(args, expected)
+
     def test_project_config_between_options_preserves_order(self):
         args = ["--transport", "test.yaml", "-j", "1-5", "--test"]
         expected = ["--transport", REMOTE_PROJECT + "/test.yaml", "-j", "1-5", "--test"]
@@ -122,9 +130,10 @@ class RemoteArgumentsTest(unittest.TestCase):
         self.assert_forwarded(["-t", "-j", ""], ["-t", "-j", ""])
 
     def test_arguments_survive_optional_sync(self):
-        sync = SOURCE.parent / "sync.sh"
-        (self.project / "sync.sh").write_bytes(sync.read_bytes())
-        (self.project / "sync.sh").chmod(0o755)
+        sync = SOURCE.parent / "utils/sync.sh"
+        (self.project / "utils").mkdir()
+        (self.project / "utils/sync.sh").write_bytes(sync.read_bytes())
+        (self.project / "utils/sync.sh").chmod(0o755)
         self.command("rsync", "#!/bin/sh\nexit 0\n")
         args = ["test.yaml", "-t", "--test", "-j", "1,3"]
         result = self.run_launcher(args, answers="yy")

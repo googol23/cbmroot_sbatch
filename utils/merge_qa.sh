@@ -23,7 +23,7 @@ Examples:
 
     $(basename "$0") -j 16 -o merged.root /path/to/qa "1-500"
 
-    $(basename "$0") -m merge_qa.C /path/to/qa "1-100"
+    $(basename "$0") -m macros/merge_qa.C /path/to/qa "1-100"
 
     $(basename "$0") --list-only -l files.txt /path/to/qa "1-100"
 EOF

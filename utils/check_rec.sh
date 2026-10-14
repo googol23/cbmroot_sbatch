@@ -182,6 +182,6 @@ fi
 exit 0
 
 
-./check_tra.sh /lustre/cbm/users/dramirez/mc/out/tra/ "1-99"
-./check_raw.sh /lustre/cbm/users/dramirez/mc/out/raw/ "1-99"
-./check_rec.sh /lustre/cbm/users/dramirez/mc/out/rec/ "1-99"
+./utils/check_tra.sh /lustre/cbm/users/dramirez/mc/out/tra/ "1-99"
+./utils/check_raw.sh /lustre/cbm/users/dramirez/mc/out/raw/ "1-99"
+./utils/check_rec.sh /lustre/cbm/users/dramirez/mc/out/rec/ "1-99"

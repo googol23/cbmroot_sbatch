@@ -19,7 +19,7 @@ class PipelineTestMode(unittest.TestCase):
         workspace = tempfile.TemporaryDirectory(prefix="cbm-h6-")
         self.addCleanup(workspace.cleanup)
         self.root = Path(workspace.name)
-        self.config = yaml.safe_load((PROJECT / "default_config.yaml").read_text())
+        self.config = yaml.safe_load((PROJECT / "config/default_config.yaml").read_text())
         self.config["run"].update(
             pipeline_test=False,
             task_range="1",
@@ -49,7 +49,7 @@ class PipelineTestMode(unittest.TestCase):
     def load_config(self, *options):
         self.write_config()
         return subprocess.run(
-            [sys.executable, str(PROJECT / "config_loader.py"),
+            [sys.executable, str(PROJECT / "utils/config_loader.py"),
              str(self.config_path), *options],
             env=self.env, text=True, capture_output=True, timeout=5,
         )
@@ -72,7 +72,7 @@ class PipelineTestMode(unittest.TestCase):
         if task_id is not None:
             env["SLURM_ARRAY_TASK_ID"] = task_id
         return subprocess.run(
-            ["bash", str(PROJECT / "success.sbash")],
+            ["bash", str(PROJECT / "sbash/success.sbash")],
             env=env, text=True, capture_output=True, timeout=5,
         )
 

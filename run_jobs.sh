@@ -114,6 +114,12 @@ while (( $# )); do
     esac
 done
 
+# Configuration files live under config/. Preserve explicit paths, but allow
+# the convenient basename form used before the project reorganization.
+if [[ -n "$config_file" && "$config_file" != /* && ! -e "$config_file" &&
+      -f "${SCRIPT_DIR}/config/${config_file}" ]]; then
+    config_file="${SCRIPT_DIR}/config/${config_file}"
+fi
 
 # ---------------------------------------------------------------------------
 # Host determination
@@ -150,7 +156,7 @@ if ! "$local_mode"; then
       read -p "Please confirm you want to synchronize the current script state to the remote folde: ${SYNC_PATH}? [y/n]" -n 1 -r
       echo    # (optional) move to a new line
       if [[ $REPLY =~ ^[Yy]$ ]]; then
-        ./sync.sh ${SYNC_PATH}
+        "${SCRIPT_DIR}/utils/sync.sh" "${SYNC_PATH}"
       fi
 
       # SSH passes a command string to the login shell. POSIX single-quote
@@ -184,7 +190,7 @@ explicit_config=false
 if [[ -n "$config_file" ]]; then
     explicit_config=true
 else
-    config_file="${SCRIPT_DIR}/default_config.yaml"
+    config_file="${SCRIPT_DIR}/config/default_config.yaml"
 fi
 
 CBM_RUN_DIR="$SCRIPT_DIR"
@@ -197,7 +203,7 @@ if "$test_override"; then
 fi
 
 settings="$(
-    python3 "${SCRIPT_DIR}/config_loader.py" "${loader_args[@]}"
+    python3 "${SCRIPT_DIR}/utils/config_loader.py" "${loader_args[@]}"
 )" || exit 1
 
 while IFS=$'\t' read -r key value; do
@@ -348,33 +354,33 @@ if "$local_mode"; then
 
             if "$RUN_TRA"; then
                 echo "[local:${task_id}] Starting Transport"
-                "${SCRIPT_DIR}/${tra_exe}"
+                "${SCRIPT_DIR}/sbash/${tra_exe}"
                 echo "[local:${task_id}] Transport completed"
                 if "$RUN_STEP_QA"; then
                     echo "[local:${task_id}] Starting Transport QA"
-                    "${SCRIPT_DIR}/${tra_qa_exe}" ||
+                    "${SCRIPT_DIR}/sbash/${tra_qa_exe}" ||
                         echo "[local:${task_id}] WARNING: Transport QA failed" >&2
                 fi
             fi
 
             if "$RUN_DIG"; then
                 echo "[local:${task_id}] Starting Digitization"
-                "${SCRIPT_DIR}/${raw_exe}"
+                "${SCRIPT_DIR}/sbash/${raw_exe}"
                 echo "[local:${task_id}] Digitization completed"
                 if "$RUN_STEP_QA"; then
                     echo "[local:${task_id}] Starting Digitization QA"
-                    "${SCRIPT_DIR}/${raw_qa_exe}" ||
+                    "${SCRIPT_DIR}/sbash/${raw_qa_exe}" ||
                         echo "[local:${task_id}] WARNING: Digitization QA failed" >&2
                 fi
             fi
 
             if "$RUN_REC"; then
                 echo "[local:${task_id}] Starting Reconstruction"
-                "${SCRIPT_DIR}/${rec_exe}"
+                "${SCRIPT_DIR}/sbash/${rec_exe}"
                 echo "[local:${task_id}] Reconstruction completed"
                 if "$RUN_STEP_QA"; then
                     echo "[local:${task_id}] Starting Reconstruction QA"
-                    "${SCRIPT_DIR}/${rec_qa_exe}" ||
+                    "${SCRIPT_DIR}/sbash/${rec_qa_exe}" ||
                         echo "[local:${task_id}] WARNING: Reconstruction QA failed" >&2
                 fi
             fi
@@ -449,7 +455,7 @@ if "$local_mode"; then
         if (
             export SLURM_JOB_ID="local_qa_${BASHPID}"
             unset SLURM_ARRAY_TASK_ID
-            "${SCRIPT_DIR}/${qa_exe}"
+            "${SCRIPT_DIR}/sbash/${qa_exe}"
         ); then
             echo "Full-chain QA completed"
         else
@@ -519,7 +525,7 @@ declare -a full_qa_dependencies=()
 if "$RUN_TRA"; then
     tra_id=$(sbatch --parsable \
         "${tra_clpars[@]}" \
-        "${SCRIPT_DIR}/$tra_exe")
+        "${SCRIPT_DIR}/sbash/$tra_exe")
 
     echo "Stage Transport: $tra_id"
     full_qa_dependencies+=("$tra_id")
@@ -529,7 +535,7 @@ if "$RUN_TRA"; then
         tra_qa_id=$(sbatch --parsable \
             "${tra_qa_clpars[@]}" \
             "--dependency=aftercorr:$tra_id" \
-            "${SCRIPT_DIR}/$tra_qa_exe")
+            "${SCRIPT_DIR}/sbash/$tra_qa_exe")
         echo "Stage Transport QA: $tra_qa_id"
     fi
 fi
@@ -537,7 +543,7 @@ fi
 if "$RUN_DIG"; then
     raw_id=$(sbatch --parsable \
         "${raw_clpars[@]}" \
-        "${SCRIPT_DIR}/$raw_exe")
+        "${SCRIPT_DIR}/sbash/$raw_exe")
 
     echo "Stage Digitization: $raw_id"
     full_qa_dependencies+=("$raw_id")
@@ -547,7 +553,7 @@ if "$RUN_DIG"; then
         raw_qa_id=$(sbatch --parsable \
             "${raw_qa_clpars[@]}" \
             "--dependency=aftercorr:$raw_id" \
-            "${SCRIPT_DIR}/$raw_qa_exe")
+            "${SCRIPT_DIR}/sbash/$raw_qa_exe")
         echo "Stage Digitization QA: $raw_qa_id"
     fi
 fi
@@ -555,7 +561,7 @@ fi
 if "$RUN_REC"; then
     rec_id=$(sbatch --parsable \
         "${rec_clpars[@]}" \
-        "${SCRIPT_DIR}/$rec_exe")
+        "${SCRIPT_DIR}/sbash/$rec_exe")
 
     echo "Stage Reconstruction: $rec_id"
     full_qa_dependencies+=("$rec_id")
@@ -564,7 +570,7 @@ if "$RUN_REC"; then
         rec_qa_id=$(sbatch --parsable \
             "${rec_qa_clpars[@]}" \
             "--dependency=aftercorr:$rec_id" \
-            "${SCRIPT_DIR}/$rec_qa_exe")
+            "${SCRIPT_DIR}/sbash/$rec_qa_exe")
         echo "Stage Reconstruction QA: $rec_qa_id"
     fi
 fi
@@ -576,7 +582,7 @@ if "$RUN_QA"; then
     fi
     qa_id=$(sbatch --parsable \
         "${qa_clpars[@]}" \
-        "${SCRIPT_DIR}/$qa_exe")
+        "${SCRIPT_DIR}/sbash/$qa_exe")
 
     echo "Stage QA: $qa_id"
 fi

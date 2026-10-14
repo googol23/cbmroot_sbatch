@@ -2,7 +2,19 @@
 
 Configure, run, and check CBMROOT transport, digitization, reconstruction, and quality assurance (QA) using Bash scripts. The main entry point, `run_jobs.sh`, supports Slurm submission and concurrent local execution.
 
-> Real QA requires a project-local `run_qa.C` macro that is not included in this repository. Its aggregate output also differs from the per-task layout expected by QA checking and merging helpers. Read the QA section before selecting that stage.
+> Real QA requires `macros/run_qa.C`. Its aggregate output also differs from the per-task layout expected by QA checking and merging helpers. Read the QA section before selecting that stage.
+
+## Project layout
+
+```text
+run_jobs.sh          Main launcher
+run_common.sh        Shared runtime setup
+sbash/               Slurm stage entry points
+macros/               ROOT macros
+config/               Run and stage YAML configurations
+utils/                Check, merge, sync, and legacy helper tools
+tests/                Automated regression tests
+```
 
 ## Requirements
 
@@ -21,14 +33,14 @@ Configure, run, and check CBMROOT transport, digitization, reconstruction, and q
 git clone https://github.com/googol23/cbmroot_sbatch.git
 cd cbmroot_sbatch
 python3 -m pip install PyYAML
-chmod +x *.sh *.sbash
-cp default_config.yaml my_run.yaml
+chmod +x run_jobs.sh run_common.sh sbash/*.sbash utils/*.sh
+cp config/default_config.yaml config/my_run.yaml
 ```
 
-Edit `my_run.yaml` for your installation and storage, then start with two tasks and the three processing stages:
+Edit `config/my_run.yaml` for your installation and storage, then start with two tasks and the three processing stages:
 
 ```bash
-./run_jobs.sh my_run.yaml -t -d -r -j 1-2
+./run_jobs.sh config/my_run.yaml -t -d -r -j 1-2
 ```
 
 This submits Slurm jobs; it does not wait for completion. Monitor the printed job IDs and check processing logs after the jobs finish.
@@ -44,16 +56,16 @@ This submits Slurm jobs; it does not wait for completion. Monitor the printed jo
 | `-t`, `--transport` | Select transport. |
 | `-d`, `--digitization` | Select digitization. |
 | `-r`, `--reconstruction` | Select reconstruction. |
-| `--qa` | Select full-chain QA; requires `run_qa.C`. |
+| `--qa` | Select full-chain QA; requires `macros/run_qa.C`. |
 | `--qa-mode MODE` | Select `full`, `per_step`, or `both` QA behavior. |
 | `-j RANGE`, `--jobs RANGE` | Override `run.task_range`. |
-| `--test` | Replace selected stages with `success.sbash`. |
+| `--test` | Replace selected stages with `sbash/success.sbash`. |
 | `--local` | Execute locally instead of submitting to Slurm. |
 | `-h`, `--help` | Display usage. |
 
 With an explicit YAML and no stage flags, stages come from `run.stages`. Any stage flags replace that list. Execution order is always transport → digitization → reconstruction → QA, regardless of flag or YAML order.
 
-Without an explicit YAML, other settings come from `default_config.yaml`, but stage selection comes from CLI flags. A bare `./run_jobs.sh` selects no stages.
+Without an explicit YAML, other settings come from `config/default_config.yaml`, but stage selection comes from CLI flags. A bare `./run_jobs.sh` selects no stages.
 
 Task selections accept `1`, `1-20`, or `1,3,7-10`. Use ascending ranges and decimal IDs without leading zeros. Array strides (`1-20:2`) and concurrency suffixes (`1-20%4`) are not accepted. Selecting a later stage does not add earlier stages; its inputs must already exist.
 
@@ -61,7 +73,7 @@ Task selections accept `1`, `1-20`, or `1,3,7-10`. Use ascending ranges and deci
 
 Each YAML must contain exactly five top-level, nonempty mappings: `run`, `transport`, `digitization`, `reconstruction`, and `qa`. All four stage mappings remain required for partial runs and test mode.
 
-Example `run` section, to accompany the stage mappings copied from `default_config.yaml`:
+Example `run` section, to accompany the stage mappings copied from `config/default_config.yaml`:
 
 ```yaml
 run:
@@ -110,17 +122,17 @@ qa:
 
 Supplied examples contain installation-specific paths:
 
-- `default_config.yaml`: tasks `1-100`, 999 events, all four stages.
-- `test_config.yaml`: tasks `1-2`, one event, cluster paths.
-- `test_config_local.yaml`: tasks `1-2`, one event, local installation paths; MVD is deactivated in digitization.
+- `config/default_config.yaml`: tasks `1-100`, 999 events, all four stages.
+- `config/test_config.yaml`: tasks `1-2`, one event, cluster paths.
+- `config/test_config_local.yaml`: tasks `1-2`, one event, local installation paths; MVD is deactivated in digitization.
 
 Both test configurations set `pipeline_test: false`; they run real processing unless `--test` is supplied. Adapt paths and stage selections before use.
 
-The launcher uses embedded stage mappings, not the separate `traConfig.yaml`, `rawConfig.yaml`, or `recConfig.yaml` references. `innactive_channel_config.yaml` is an additional example and is not automatically loaded.
+The launcher uses embedded stage mappings, not the separate `config/traConfig.yaml`, `config/rawConfig.yaml`, or `config/recConfig.yaml` references. `config/innactive_channel_config.yaml` is an additional example and is not automatically loaded.
 
 ### Snapshots and overlapping runs
 
-Each launch creates `log_dir/config.*` containing a copy named `run.yaml` and extracted `tra.yaml`, `raw.yaml`, and `rec.yaml`. Jobs receive the resolved settings and file paths through exported environment variables. Keep snapshots and scripts accessible until jobs finish.
+Each launch creates `log_dir/config.*` containing a copy named `run.yaml` and extracted `tra.yaml`, `raw.yaml`, `rec.yaml`, and `qa.yaml`. Jobs receive the resolved settings and file paths through exported environment variables. Keep snapshots and scripts accessible until jobs finish.
 
 The copied `run.yaml` retains the original YAML; CLI overrides are exported rather than written back into that file. Use distinct output and log directories for overlapping runs: processing commands use overwrite options, and QA removes its previous aggregate output before running.
 
@@ -147,7 +159,7 @@ The final queue summary covers the user's entire Slurm queue. Successful submiss
 ## Local execution
 
 ```bash
-LOCAL_MAX_JOBS=2 ./run_jobs.sh my_run.yaml -t -d -r -j 1-2 --local
+LOCAL_MAX_JOBS=2 ./run_jobs.sh config/my_run.yaml -t -d -r -j 1-2 --local
 ```
 
 Stages run sequentially within each task; different task pipelines run concurrently. `LOCAL_MAX_JOBS` is a positive integer, defaulting to `4`. It limits pipelines, not application threads. Slurm memory, partition, and time settings do not enforce local resource limits.
@@ -157,10 +169,10 @@ The launcher supplies the job/task environment variables expected by the scripts
 ### Pipeline smoke test
 
 ```bash
-./run_jobs.sh my_run.yaml -t -d -r -j 1-2 --local --test
+./run_jobs.sh config/my_run.yaml -t -d -r -j 1-2 --local --test
 ```
 
-`--test` or `pipeline_test: true` replaces selected stages with `success.sbash`, which prints job/task information, sleeps one second, and reports completion. It does not load CBMROOT, process data, produce ROOT files, or create normal stage logs. The configuration must still be valid and `log_dir` writable. Test mode without `--local` still requires Slurm.
+`--test` or `pipeline_test: true` replaces selected stages with `sbash/success.sbash`, which prints job/task information, sleeps one second, and reports completion. It does not load CBMROOT, process data, produce ROOT files, or create normal stage logs. The configuration must still be valid and `log_dir` writable. Test mode without `--local` still requires Slurm.
 
 ## Input and output layout
 
@@ -176,7 +188,7 @@ Task `ID` reads `input_dir/dcmqgsm_ID.root`.
 
 Digitization copies transport parameters into its own task directory. Reconstruction consumes transport output, digitization output, and digitization parameters. Full-chain QA consumes the completed task range. Per-step QA writes beneath each task's `qa/ID` directory.
 
-Per-step launchers are `run_tra_qa.sbash`, `run_raw_qa.sbash`, and `run_rec_qa.sbash`. They expect project-local macros named `run_tra_qa.C`, `run_raw_qa.C`, and `run_rec_qa.C`, each with this interface:
+Per-step launchers are `sbash/run_tra_qa.sbash`, `sbash/run_raw_qa.sbash`, and `sbash/run_rec_qa.sbash`. They expect macros named `macros/run_tra_qa.C`, `macros/run_raw_qa.C`, and `macros/run_rec_qa.C`, each with this interface:
 
 ```cpp
 void run_STAGE_qa(TString outputDir, Int_t taskId, TString setup,
@@ -190,7 +202,7 @@ This gives each macro the pipeline output root and task ID so it can locate all 
 Use the unified checker for current processing output:
 
 ```bash
-./check_jobs.sh --stage tra,raw,reco --detailed --no-color /path/to/output/my_run "1-2"
+./utils/check_jobs.sh --stage tra,raw,reco --detailed --no-color /path/to/output/my_run "1-2"
 ```
 
 Checker stage names are `tra`, `raw`, `reco`, and `qa`, or `all` (default). `-j N` controls parallel checks; default `auto` uses available CPUs capped at 16. Put options before the output root and range.
@@ -205,13 +217,13 @@ For processing stages, the checker accepts plain and gzip-compressed logs, prefe
 
 Exit codes: `0` for all selected logs passing, `1` for failed/missing logs, and `2` for invalid arguments or checker errors. This checks log messages, not ROOT integrity or scheduler state.
 
-Older `check_tra.sh`, `check_raw.sh`, and `check_rec.sh` support `--detailed`, but require `.log.gz` files and only recognize `Macro finished successfully.` The launcher writes plain logs, so these helpers can report failures for valid current output.
+Older `utils/check_tra.sh`, `utils/check_raw.sh`, and `utils/check_rec.sh` support `--detailed`, but require `.log.gz` files and only recognize `Macro finished successfully.` The launcher writes plain logs, so these helpers can report failures for valid current output.
 
-`check_qa.sh` and the unified checker's QA stage expect `qa/ID/ID.qa.log`, not aggregate `qa/qa.log`. Select processing stages explicitly when checking the current launcher's output.
+`utils/check_qa.sh` and the unified checker's QA stage expect `qa/ID/ID.qa.log`, not aggregate `qa/qa.log`. Select processing stages explicitly when checking the current launcher's output.
 
 ## QA behavior and requirements
 
-`run_qa.sbash` expects `run_qa.C` beside the project scripts and invokes:
+`sbash/run_qa.sbash` expects `macros/run_qa.C` and invokes:
 
 ```text
 run_qa.C("output_dir", "task_range", "setup_tag", -1)
@@ -229,15 +241,15 @@ Pipeline test mode substitutes the smoke-test script and does not validate real 
 
 ### Merging existing per-task QA files
 
-`merge_qa.sh` expects `qa/ID/ID.qa.log` and `qa/ID/ID.qa.root`. It selects only files with the success marker and a nonempty ROOT file.
+`utils/merge_qa.sh` expects `qa/ID/ID.qa.log` and `qa/ID/ID.qa.root`. It selects only files with the success marker and a nonempty ROOT file.
 
 ```bash
-./merge_qa.sh --list-only --file-list files.txt /path/to/per-task/qa "1-20"
+./utils/merge_qa.sh --list-only --file-list files.txt /path/to/per-task/qa "1-20"
 ```
 
 Default merging uses `hadd` with four jobs and writes `<qa_dir>/merged.root`. Options: `-o/--output`, `-j/--jobs`, `-m/--merger`, `-l/--file-list`, and `--list-only`. Custom executables receive `file_list output.root`; ROOT macros receive the same two arguments.
 
-`merge_qa.C` merges only four selected momentum histograms under `CbmCaOutputQa/prim`, as defined in `selectedObjects`; it is not a full-file merger. Failed tasks are excluded, and merging can return success despite exclusions. Inspect the summary and output contents.
+`macros/merge_qa.C` merges only four selected momentum histograms under `CbmCaOutputQa/prim`, as defined in `selectedObjects`; it is not a full-file merger. Failed tasks are excluded, and merging can return success despite exclusions. Inspect the summary and output contents.
 
 ## Remote execution and synchronization
 
@@ -247,7 +259,7 @@ The remote project path in `run_jobs.sh` is hardcoded to `/lustre/cbm/users/dram
 
 Arguments are preserved, and execution starts in the remote project directory. Project-local configurations map to the same relative remote location. Relative paths resolve from the caller's working directory, with an existing parent inside the project. External configurations require an absolute path accessible remotely. Argument forwarding alone does not copy files.
 
-`sync.sh [DEST]` uses SSH/rsync to `lustre.hpc.gsi.de`, copying top-level `.sbash`, `.sh`, `.py`, `.yaml`, `.yml`, and `.C` files from the current working directory. Run it from the repository root. Its filters exclude nested directories, tests, and the README; copy nested configurations separately. The launcher's optional synchronization also assumes `sync.sh` is in the current working directory.
+`utils/sync.sh [DEST]` uses SSH/rsync to `lustre.hpc.gsi.de` and resolves the project root from its own location, so it can be called from any working directory. It synchronizes `run_jobs.sh`, `run_common.sh`, `sbash/`, `macros/`, `config/`, and `utils/`; unrelated data products, tests, Git metadata, and Python bytecode caches are excluded. The launcher invokes this utility by its absolute project-relative path.
 
 ## Verification and troubleshooting
 
@@ -261,7 +273,7 @@ Tests cover smoke-test behavior, remote argument forwarding, and processing-stag
 
 For failures, inspect scheduler stdout and stage logs. Check setup-script access, executable paths, generator filenames, upstream input files, and compute-node access to snapshots. A smoke-test success validates orchestration only.
 
-`run_test.sh` is a legacy hardcoded transport experiment with digitization/reconstruction commands commented out. Use `run_jobs.sh --test` for the maintained pipeline smoke test.
+`utils/run_test.sh` is a legacy hardcoded transport experiment with digitization/reconstruction commands commented out. Use `run_jobs.sh --test` for the maintained pipeline smoke test.
 
 ## License
 
