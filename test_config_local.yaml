@@ -2,7 +2,7 @@
 # Use separate output_dir and log_dir values for overlapping runs.
 run:
   stages: [transport, digitization, reconstruction, qa]
-  task_range: "1-2"
+  task_range: "1-1"
   pipeline_test: false
   job_name: cbmsim
   partition: long

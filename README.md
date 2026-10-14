@@ -156,7 +156,7 @@ Task `ID` reads `input_dir/dcmqgsm_ID.root`.
 | --- | --- |
 | Transport | `tra/ID/ID.tra.root`, `tra/ID/ID.par.root`, `tra/ID/transport.log` |
 | Digitization | `raw/ID/ID.digi.root`, `raw/ID/ID.par.root`, `raw/ID/digitization.log` |
-| Reconstruction | `reco/ID/ID.reco.root`, `reco/ID/reconstruction.log` |
+| Reconstruction | `rec/ID/ID.reco.root`, `rec/ID/reconstruction.log` |
 | Aggregate QA | `qa/qa.root`, `qa/qa.log` |
 
 Digitization copies transport parameters into its own task directory. Reconstruction consumes transport output, digitization output, and digitization parameters. Shared setup creates per-task QA directories, but the current QA launcher writes aggregate files.

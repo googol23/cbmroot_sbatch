@@ -24,7 +24,7 @@ Usage:
 Check one or more processing stages below a common output directory.
 
 Arguments:
-    output_root    Directory containing tra/, raw/, reco/, and/or qa/
+    output_root    Directory containing tra/, raw/, rec/, and/or qa/
     task_range     Task IDs such as 1, 1-20, or 1,3,7-10
 
 Options:
@@ -45,7 +45,7 @@ Examples:
 Expected logs:
     tra/<task_id>/transport.log[.gz]
     raw/<task_id>/digitization.log[.gz]
-    reco/<task_id>/reconstruction.log[.gz]
+    rec/<task_id>/reconstruction.log[.gz]
     qa/<task_id>/<task_id>.qa.log
 
 Exit status:
@@ -183,7 +183,7 @@ fi
 declare -A STAGE_DIR=(
     [tra]='tra'
     [raw]='raw'
-    [reco]='reco'
+    [reco]='rec'
     [qa]='qa'
 )
 

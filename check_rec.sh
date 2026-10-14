@@ -19,8 +19,8 @@ Usage:
     $0 <reconstruction_output_dir> <task_range>
 
 Examples:
-    $0 /lustre/cbm/users/\${USER}/mc/out/reco "1-20"
-    $0 /lustre/cbm/users/\${USER}/mc/out/reco "1,3,7-10"
+    $0 /lustre/cbm/users/\${USER}/mc/out/rec "1-20"
+    $0 /lustre/cbm/users/\${USER}/mc/out/rec "1,3,7-10"
 
 Options:
     --detailed    Print the detailed list of failed and successful jobs
@@ -184,4 +184,4 @@ exit 0
 
 ./check_tra.sh /lustre/cbm/users/dramirez/mc/out/tra/ "1-99"
 ./check_raw.sh /lustre/cbm/users/dramirez/mc/out/raw/ "1-99"
-./check_rec.sh /lustre/cbm/users/dramirez/mc/out/reco/ "1-99"
+./check_rec.sh /lustre/cbm/users/dramirez/mc/out/rec/ "1-99"

@@ -15,7 +15,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 STAGES = {
     "transport": ("run_tra.sbash", "tra", "transport.log"),
     "digitization": ("run_raw.sbash", "raw", "digitization.log"),
-    "reconstruction": ("run_rec.sbash", "reco", "reconstruction.log"),
+    "reconstruction": ("run_rec.sbash", "rec", "reconstruction.log"),
 }
 
 
@@ -51,7 +51,7 @@ class StageFailureTests(unittest.TestCase):
         self.input = self.root / "input with spaces"
         self.input.mkdir()
         (self.input / "dcmqgsm_1.root").write_text("input fixture")
-        for stage in ("tra", "raw", "reco"):
+        for stage in ("tra", "raw", "rec"):
             (self.output / stage / "1").mkdir(parents=True)
         (self.output / "tra/1/1.tra.root").write_text("transport fixture")
         (self.output / "tra/1/1.par.root").write_text("parameter fixture")
