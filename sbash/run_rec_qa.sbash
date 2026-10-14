@@ -16,11 +16,14 @@ QA_STEP_MACRO="$QA_RECONSTRUCTION_MACRO"
 QA_STEP_OUTPUT="$QA_RECONSTRUCTION_OUTPUT"
 QA_STEP_LOG="$QA_RECONSTRUCTION_LOG"
 
+require_file "$TRANSPORT_OUTPUT" "Transport output file"
+require_file "$DIGITIZATION_OUTPUT" "Digitization output file"
 require_file "$RECONSTRUCTION_OUTPUT" "Reconstruction output file"
+require_file "$DIGITIZATION_PARMET" "Digitization parameter file"
 require_file "$QA_STEP_MACRO" "Reconstruction QA macro"
 require_command root
 
-qa_call="${QA_STEP_MACRO}(\"${OUTPUT_DIR}\",${TASK_ID},\"${SETUP_TAG}\",${NEVENTS},\"${QA_STEP_OUTPUT}\")"
+qa_call="${QA_STEP_MACRO}(\"${TRANSPORT_OUTPUT}\",\"${DIGITIZATION_OUTPUT}\",\"${RECONSTRUCTION_OUTPUT}\",\"${DIGITIZATION_PARMET}\",\"${SETUP_TAG}\",${NEVENTS},\"${QA_STEP_OUTPUT}\")"
 log "Starting reconstruction QA: ${QA_STEP_OUTPUT}"
 run_logged_command "$QA_STEP_LOG" root -l -q -b "$qa_call"
 require_file "$QA_STEP_OUTPUT" "Reconstruction QA output"

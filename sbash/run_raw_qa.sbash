@@ -17,11 +17,15 @@ QA_STEP_OUTPUT="$QA_DIGITIZATION_OUTPUT"
 QA_STEP_LOG="$QA_DIGITIZATION_LOG"
 
 require_file "$DIGITIZATION_OUTPUT" "Digitization output file"
-require_file "$DIGITIZATION_PARMET" "Digitization parameter file"
 require_file "$QA_STEP_MACRO" "Digitization QA macro"
 require_command root
 
-qa_call="${QA_STEP_MACRO}(\"${OUTPUT_DIR}\",${TASK_ID},\"${SETUP_TAG}\",${NEVENTS},\"${QA_STEP_OUTPUT}\")"
+transport_input=""
+if [[ -r "$TRANSPORT_OUTPUT" ]]; then
+  transport_input="$TRANSPORT_OUTPUT"
+fi
+
+qa_call="${QA_STEP_MACRO}(\"${DIGITIZATION_OUTPUT}\",\"${transport_input}\",${NEVENTS},\"${QA_STEP_OUTPUT}\")"
 log "Starting digitization QA: ${QA_STEP_OUTPUT}"
 run_logged_command "$QA_STEP_LOG" root -l -q -b "$qa_call"
 require_file "$QA_STEP_OUTPUT" "Digitization QA output"
