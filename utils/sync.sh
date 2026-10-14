@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-DEST=${1:-/lustre/cbm/users/${USER}/slurm_scripts_v3/}
+: "${1:?Usage: sync.sh DEST SYNC_HOST}"
+: "${2:?Usage: sync.sh DEST SYNC_HOST}"
+DEST="$1"
+SYNC_HOST="$2"
 
 PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+printf -v QUOTED_DEST '%q' "$DEST"
+
+ssh "${USER}@${SYNC_HOST}" "mkdir -p -- ${QUOTED_DEST}"
 
 rsync -av -e "ssh " \
     --exclude='__pycache__/' \
@@ -13,6 +20,6 @@ rsync -av -e "ssh " \
     --include='/config/***' \
     --include='/utils/***' \
     --exclude='*' \
-    "${PROJECT_DIR}/" "${USER}@lustre.hpc.gsi.de:${DEST}"
+    "${PROJECT_DIR}/" "${USER}@${SYNC_HOST}:${DEST}"
 
 printf '%s\n' "${DEST}"

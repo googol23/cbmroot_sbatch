@@ -72,7 +72,19 @@ Task selections accept `1`, `1-20`, or `1,3,7-10`. Use ascending ranges and deci
 
 ## Configuration
 
-Each YAML must contain exactly five top-level, nonempty mappings: `run`, `transport`, `digitization`, `reconstruction`, and `qa`. All four stage mappings remain required for partial runs and test mode.
+Each YAML must contain exactly six top-level, nonempty mappings: `remote`, `run`, `transport`, `digitization`, `reconstruction`, and `qa`. All four stage mappings remain required for partial runs and test mode.
+
+### `remote`
+
+```yaml
+remote:
+  source_hostname_prefix: lxi
+  execution_host: vae25-virgo4.hpc.gsi.de
+  sync_host: lustre.hpc.gsi.de
+  snapshot_root: /lustre/cbm/users/${USER}/slurm_scripts_v3
+```
+
+The launcher reads this block before remote routing. `source_hostname_prefix` selects hosts that must route through SSH, `execution_host` receives the launcher command, `sync_host` receives the rsync snapshot, and `snapshot_root` contains unique run directories. `${USER}` is supported in `snapshot_root`; arbitrary shell expansion is rejected.
 
 Example `run` section, to accompany the stage mappings copied from `config/default_config.yaml`:
 
@@ -254,15 +266,15 @@ Default merging uses `hadd` with four jobs and writes `<qa_dir>/merged.root`. Op
 
 ## Remote execution and synchronization
 
-On hostnames beginning with `lxi`, nonlocal launches prompt for remote execution on `vae25-virgo4.hpc.gsi.de`, followed by optional synchronization. `--local` bypasses this routing. The check is hostname-based, not a check for Slurm availability.
+On hostnames beginning with `remote.source_hostname_prefix`, nonlocal launches prompt for remote execution on `remote.execution_host`, followed by required snapshot synchronization. `--local` bypasses this routing. The check is hostname-based, not a check for Slurm availability.
 
-Each synchronized launch uses a unique directory below the hardcoded remote root `/lustre/cbm/users/dramirez/slurm_scripts_v3/`, named `run-TIMESTAMP-PID`. This immutable snapshot is the source used by every submitted job, so later local edits and overlapping submissions cannot alter an active run.
+Each synchronized launch uses a unique directory below `remote.snapshot_root`, named `run-TIMESTAMP-PID`. This immutable snapshot is the source used by every submitted job, so later local edits and overlapping submissions cannot alter an active run.
 
 Arguments are preserved, and execution starts in the remote snapshot. Project-local configurations map to the same relative snapshot location. Relative paths resolve from the caller's working directory, with an existing parent inside the project. External configurations require an absolute path accessible remotely. Argument forwarding alone does not copy files.
 
 A cleanup job is submitted with an `afterany` dependency on every processing and QA job. It removes only the validated run snapshot after all jobs terminate, including failed jobs. Pass `--debug` to make the cleanup job preserve and report the snapshot instead. Direct submission-host and local runs do not schedule snapshot cleanup.
 
-`utils/sync.sh [DEST]` uses SSH/rsync to `lustre.hpc.gsi.de` and resolves the project root from its own location, so it can be called from any working directory. It synchronizes `run_jobs.sh`, `run_common.sh`, `sbash/`, `macros/`, `config/`, and `utils/`; unrelated data products, tests, Git metadata, and Python bytecode caches are excluded. The launcher invokes this utility by its absolute project-relative path.
+`utils/sync.sh DEST SYNC_HOST` first creates the destination directory over SSH, then uses rsync with strict error propagation to the configured sync host and resolves the project root from its own location, so it can be called from any working directory. It synchronizes `run_jobs.sh`, `run_common.sh`, `sbash/`, `macros/`, `config/`, and `utils/`; unrelated data products, tests, Git metadata, and Python bytecode caches are excluded. The launcher invokes this utility by its absolute project-relative path.
 
 ## Verification and troubleshooting
 

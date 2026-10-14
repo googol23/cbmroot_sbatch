@@ -1,5 +1,11 @@
 # One source for run settings and the original CBMROOT stage configurations.
 # Use separate output_dir and log_dir values for overlapping runs.
+remote:
+  source_hostname_prefix: lxi
+  execution_host: vae25-virgo4.hpc.gsi.de
+  sync_host: lustre.hpc.gsi.de
+  snapshot_root: /lustre/cbm/users/${USER}/
+
 run:
   stages: [transport, digitization, reconstruction, qa]
   task_range: "1-2"

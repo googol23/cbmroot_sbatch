@@ -110,7 +110,33 @@ class PipelineTestMode(unittest.TestCase):
         self.config.pop("qa")
         result = self.load_config("--test")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("expected run, transport, digitization, reconstruction, and qa mappings", result.stderr)
+        self.assertIn("expected remote, run, transport, digitization, reconstruction, and qa mappings", result.stderr)
+
+    def test_remote_settings_are_exported(self):
+        result = self.load_config("--test")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        settings = dict(line.split("\t", 1) for line in result.stdout.splitlines())
+        self.assertEqual(settings["CFG_REMOTE_SOURCE_HOSTNAME_PREFIX"], "lxi")
+        self.assertEqual(settings["CFG_REMOTE_EXECUTION_HOST"], "vae25-virgo4.hpc.gsi.de")
+        self.assertEqual(settings["CFG_REMOTE_SYNC_HOST"], "lustre.hpc.gsi.de")
+        self.assertTrue(Path(settings["CFG_REMOTE_SNAPSHOT_ROOT"]).is_absolute())
+
+    def test_remote_only_mode_does_not_require_run_validation(self):
+        self.config["run"]["cbmroot_setup"] = "relative-and-missing"
+        self.write_config()
+        result = subprocess.run(
+            [sys.executable, str(PROJECT / "utils/config_loader.py"),
+             "--remote", str(self.config_path)],
+            env=self.env, text=True, capture_output=True, timeout=5,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CFG_REMOTE_EXECUTION_HOST\t", result.stdout)
+
+    def test_invalid_remote_snapshot_root_is_rejected(self):
+        self.config["remote"]["snapshot_root"] = "relative/path"
+        result = self.load_config("--test")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("remote.snapshot_root must be an absolute path", result.stderr)
 
     def test_all_qa_modes_are_accepted(self):
         for mode in ("full", "per_step", "both"):

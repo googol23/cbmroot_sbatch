@@ -127,13 +127,22 @@ if [[ -n "$config_file" && "$config_file" != /* && ! -e "$config_file" &&
     config_file="${SCRIPT_DIR}/config/${config_file}"
 fi
 
+routing_config="${config_file:-${SCRIPT_DIR}/config/default_config.yaml}"
+remote_settings="$(
+    python3 "${SCRIPT_DIR}/utils/config_loader.py" --remote "$routing_config"
+)" || exit 1
+while IFS=$'\t' read -r key value; do
+    printf -v "$key" '%s' "$value"
+    export "$key"
+done <<< "$remote_settings"
+
 # ---------------------------------------------------------------------------
 # Host determination
 # ---------------------------------------------------------------------------
 if ! "$local_mode"; then
-  if [[ "$(hostname)" == "lxi"* ]]; then
+  if [[ "$(hostname)" == "$CFG_REMOTE_SOURCE_HOSTNAME_PREFIX"* ]]; then
     remote_exec_warning
-    SYNC_ROOT=/lustre/cbm/users/${USER}/slurm_scripts_v3
+    SYNC_ROOT="$CFG_REMOTE_SNAPSHOT_ROOT"
     snapshot_id="${CBM_SNAPSHOT_ID:-}"
     if [[ -z "$snapshot_id" ]]; then
       printf -v snapshot_id '%(%Y%m%dT%H%M%S)T-%s' -1 "$$"
@@ -166,11 +175,18 @@ if ! "$local_mode"; then
         fi
       fi
 
-      echo "Synchronization of remote folder is adviced."
-      read -p "Please confirm you want to synchronize the current script state to the remote folde: ${SYNC_PATH}? [y/n]" -n 1 -r
+      echo "A synchronized snapshot is required for remote execution."
+      read -p "Create the remote run snapshot at ${SYNC_PATH}? [y/n]" -n 1 -r
       echo    # (optional) move to a new line
       if [[ $REPLY =~ ^[Yy]$ ]]; then
-        "${SCRIPT_DIR}/utils/sync.sh" "${SYNC_PATH}"
+        if ! "${SCRIPT_DIR}/utils/sync.sh" \
+            "${SYNC_PATH}" "$CFG_REMOTE_SYNC_HOST"; then
+          echo "Synchronization failed; remote execution was not started." >&2
+          exit 1
+        fi
+      else
+        echo "Remote execution cancelled because no snapshot was created." >&2
+        exit 1
       fi
 
       # SSH passes a command string to the login shell. POSIX single-quote
@@ -189,8 +205,8 @@ if ! "$local_mode"; then
       done
 
       echo "Remote execution by:"
-      printf 'ssh %s %s\n' "${USER}@vae25-virgo4.hpc.gsi.de" "$remote_command"
-      exec ssh "${USER}@vae25-virgo4.hpc.gsi.de" "$remote_command"
+      printf 'ssh %s %s\n' "${USER}@${CFG_REMOTE_EXECUTION_HOST}" "$remote_command"
+      exec ssh "${USER}@${CFG_REMOTE_EXECUTION_HOST}" "$remote_command"
     else
       exit 1
     fi

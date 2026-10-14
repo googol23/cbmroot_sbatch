@@ -30,6 +30,12 @@ FIELDS = {
 }
 PATHS = {"log_dir", "cbmroot_setup", "input_dir", "output_dir"}
 STAGES = {"transport", "digitization", "reconstruction", "qa"}
+REMOTE_FIELDS = {
+    "source_hostname_prefix": "CFG_REMOTE_SOURCE_HOSTNAME_PREFIX",
+    "execution_host": "CFG_REMOTE_EXECUTION_HOST",
+    "sync_host": "CFG_REMOTE_SYNC_HOST",
+    "snapshot_root": "CFG_REMOTE_SNAPSHOT_ROOT",
+}
 BLOCKS = {
     "transport": ("tra.yaml", "CFG_TRA_CONFIG"),
     "digitization": ("raw.yaml", "CFG_RAW_CONFIG"),
@@ -42,14 +48,45 @@ def fail(message):
     sys.exit(f"Invalid run configuration: {message}")
 
 
-def validate(path, pipeline_test_override=False):
+def load_config(path):
     try:
         with path.open(encoding="utf-8") as stream:
-            config = yaml.safe_load(stream)
+            return yaml.safe_load(stream)
     except (OSError, yaml.YAMLError) as exc:
         fail(f"{path}: {exc}")
-    if not isinstance(config, dict) or set(config) != {"run", *BLOCKS}:
-        fail("expected run, transport, digitization, reconstruction, and qa mappings")
+
+
+def validate_remote(config):
+    if not isinstance(config, dict) or "remote" not in config:
+        fail("expected a remote mapping")
+    remote = config["remote"]
+    if not isinstance(remote, dict):
+        fail("remote must be a mapping")
+    unknown = set(remote) - set(REMOTE_FIELDS)
+    missing = set(REMOTE_FIELDS) - set(remote)
+    if unknown or missing:
+        fail(f"remote keys: unknown={sorted(map(str, unknown))}, missing={sorted(missing)}")
+
+    settings = {}
+    for field, variable in REMOTE_FIELDS.items():
+        value = remote[field]
+        if not isinstance(value, str) or not value:
+            fail(f"remote.{field} must be a nonempty string")
+        value = value.replace("${USER}", os.environ.get("USER", ""))
+        if "${" in value or "$(" in value or "`" in value:
+            fail(f"remote.{field} contains unsupported expansion")
+        if any(char in value for char in "\t\r\n"):
+            fail(f"remote.{field} cannot contain tabs or line breaks")
+        settings[variable] = value
+    if not Path(settings["CFG_REMOTE_SNAPSHOT_ROOT"]).is_absolute():
+        fail("remote.snapshot_root must be an absolute path")
+    return settings
+
+
+def validate(path, pipeline_test_override=False):
+    config = load_config(path)
+    if not isinstance(config, dict) or set(config) != {"remote", "run", *BLOCKS}:
+        fail("expected remote, run, transport, digitization, reconstruction, and qa mappings")
     run = config["run"]
     if not isinstance(run, dict):
         fail("run must be a mapping")
@@ -71,10 +108,11 @@ def validate(path, pipeline_test_override=False):
     qa_mode = qa.get("mode")
     if qa_mode not in {"full", "per_step", "both"}:
         fail("qa.mode must be one of: full, per_step, both")
-    settings = {
+    settings = validate_remote(config)
+    settings.update({
         "CFG_STAGES": ",".join(stages),
         "CFG_QA_MODE": qa_mode,
-    }
+    })
     for field, variable in FIELDS.items():
         value = run[field]
         if field == "pipeline_test":
@@ -116,6 +154,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", type=Path, help="Run YAML configuration")
     parser.add_argument(
+        "--remote",
+        action="store_true",
+        help="Validate and print only remote routing settings",
+    )
+    parser.add_argument(
         "--test",
         action="store_true",
         help="Use pipeline test mode",
@@ -123,6 +166,12 @@ def main():
     args = parser.parse_args()
 
     path = args.path.expanduser().resolve()
+    if args.remote:
+        settings = validate_remote(load_config(path))
+        for key, value in settings.items():
+            print(f"{key}\t{value}")
+        return
+
     config, settings = validate(
         path,
         pipeline_test_override=args.test,

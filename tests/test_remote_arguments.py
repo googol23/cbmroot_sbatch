@@ -22,6 +22,10 @@ class RemoteArgumentsTest(unittest.TestCase):
         self.project.mkdir()
         self.launcher = self.project / "run_jobs.sh"
         self.launcher.write_bytes(SOURCE.read_bytes())
+        (self.project / "utils").mkdir()
+        sync = SOURCE.parent / "utils/sync.sh"
+        (self.project / "utils/sync.sh").write_bytes(sync.read_bytes())
+        (self.project / "utils/sync.sh").chmod(0o755)
         self.remote = self.root / "remote project"
         self.remote.mkdir()
         self.capture = self.root / "capture.json"
@@ -38,11 +42,21 @@ class RemoteArgumentsTest(unittest.TestCase):
             '"$H2_PYTHON" "$H2_RECEIVER" "./run_jobs.sh" "$@"\n'
         )
         self.command("hostname", "#!/bin/sh\nprintf 'lxi-review\\n'\n")
+        self.command("rsync", "#!/bin/sh\nexit 0\n")
+        self.command(
+            "python3",
+            "#!/bin/sh\n"
+            "printf 'CFG_REMOTE_SOURCE_HOSTNAME_PREFIX\\tlxi\\n'\n"
+            "printf 'CFG_REMOTE_EXECUTION_HOST\\tvae25-virgo4.hpc.gsi.de\\n'\n"
+            "printf 'CFG_REMOTE_SYNC_HOST\\tlustre.hpc.gsi.de\\n'\n"
+            "printf 'CFG_REMOTE_SNAPSHOT_ROOT\\t/lustre/cbm/users/dramirez/slurm_scripts_v3\\n'\n",
+        )
         self.command(
             "ssh",
             "#!" + sys.executable + "\n"
             "import os, subprocess, sys\n"
             "assert len(sys.argv) == 3, sys.argv\n"
+            "if sys.argv[2].startswith('mkdir -p -- '): sys.exit(0)\n"
             "shell = '''\n"
             "cd() { command cd \"$H2_REMOTE_DIR\"; }\n"
             "'''\n"
@@ -63,7 +77,7 @@ class RemoteArgumentsTest(unittest.TestCase):
         path.write_text(content)
         path.chmod(0o755)
 
-    def run_launcher(self, arguments, cwd=None, env=None, answers="yn"):
+    def run_launcher(self, arguments, cwd=None, env=None, answers="yy"):
         return subprocess.run(
             ["bash", str(self.launcher), *arguments],
             cwd=cwd or self.project,
@@ -130,11 +144,7 @@ class RemoteArgumentsTest(unittest.TestCase):
         # Task-range semantics are validated by the destination launcher.
         self.assert_forwarded(["-t", "-j", ""], ["-t", "-j", ""])
 
-    def test_arguments_survive_optional_sync(self):
-        sync = SOURCE.parent / "utils/sync.sh"
-        (self.project / "utils").mkdir()
-        (self.project / "utils/sync.sh").write_bytes(sync.read_bytes())
-        (self.project / "utils/sync.sh").chmod(0o755)
+    def test_arguments_survive_snapshot_sync(self):
         self.command("rsync", "#!/bin/sh\nexit 0\n")
         args = ["test.yaml", "-t", "--test", "-j", "1,3"]
         result = self.run_launcher(args, answers="yy")
@@ -142,6 +152,19 @@ class RemoteArgumentsTest(unittest.TestCase):
         captured = json.loads(self.capture.read_text())
         expected = ["./run_jobs.sh", REMOTE_PROJECT + "/test.yaml", *args[1:]]
         self.assertEqual(captured["argv"], expected)
+
+    def test_declined_snapshot_creation_does_not_execute_remotely(self):
+        result = self.run_launcher(["-t"], answers="yn")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no snapshot was created", result.stderr)
+        self.assertFalse(self.capture.exists())
+
+    def test_failed_snapshot_sync_does_not_execute_remotely(self):
+        self.command("rsync", "#!/bin/sh\nexit 23\n")
+        result = self.run_launcher(["-t"], answers="yy")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Synchronization failed", result.stderr)
+        self.assertFalse(self.capture.exists())
 
     def test_declined_remote_execution_does_not_connect(self):
         result = self.run_launcher(["-t"], answers="n")
