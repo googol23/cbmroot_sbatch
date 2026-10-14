@@ -15,6 +15,7 @@ Usage: ./run_jobs.sh [run_config.yaml] [OPTIONS]
   -j, --jobs RANGE      Slurm/local task range
       --test            Run the success test script instead
       --local           Run jobs locally instead of submitting to Slurm
+      --debug           Preserve the remote run snapshot after completion
   -h, --help            Show this help
 
 Stage flags replace the YAML stage list when any are supplied.
@@ -50,6 +51,7 @@ jobs_override=""
 qa_mode_override=""
 test_override=false
 local_mode=false
+debug_mode=false
 
 while (( $# )); do
     case "$1" in
@@ -83,6 +85,10 @@ while (( $# )); do
             ;;
         --local)
             local_mode=true
+            shift
+            ;;
+        --debug)
+            debug_mode=true
             shift
             ;;
         -j|--jobs)
@@ -127,7 +133,15 @@ fi
 if ! "$local_mode"; then
   if [[ "$(hostname)" == "lxi"* ]]; then
     remote_exec_warning
-    SYNC_PATH=/lustre/cbm/users/dramirez/slurm_scripts_v3/
+    SYNC_ROOT=/lustre/cbm/users/dramirez/slurm_scripts_v3
+    snapshot_id="${CBM_SNAPSHOT_ID:-}"
+    if [[ -z "$snapshot_id" ]]; then
+      printf -v snapshot_id '%(%Y%m%dT%H%M%S)T-%s' -1 "$$"
+    elif [[ ! "$snapshot_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      echo "Invalid CBM_SNAPSHOT_ID: $snapshot_id" >&2
+      exit 2
+    fi
+    SYNC_PATH="${SYNC_ROOT}/run-${snapshot_id}"
     read -p "Current mode is set to remote execution, confirm you want to execute the command in a virgo node: [y/n]" -n 1 -r
     echo    # (optional) move to a new line
   
@@ -166,7 +180,10 @@ if ! "$local_mode"; then
         printf "'%s'" "$escaped"
       }
 
-      remote_command="cd $(quote_remote_arg "$SYNC_PATH") && exec bash ./run_jobs.sh"
+      remote_command="cd $(quote_remote_arg "$SYNC_PATH")"
+      remote_command+=" && export CBM_RUN_SNAPSHOT=true"
+      remote_command+=" CBM_RUN_SNAPSHOT_ROOT=$(quote_remote_arg "$SYNC_ROOT")"
+      remote_command+=" && exec bash ./run_jobs.sh"
       for arg in "${remote_args[@]}"; do
         remote_command+=" $(quote_remote_arg "$arg")"
       done
@@ -521,6 +538,7 @@ qa_clpars=(
 # ---------------------------------------------------------------------------
 
 declare -a full_qa_dependencies=()
+declare -a submitted_job_ids=()
 
 if "$RUN_TRA"; then
     tra_id=$(sbatch --parsable \
@@ -529,6 +547,7 @@ if "$RUN_TRA"; then
 
     echo "Stage Transport: $tra_id"
     full_qa_dependencies+=("$tra_id")
+    submitted_job_ids+=("$tra_id")
 
     raw_clpars+=("--dependency=aftercorr:$tra_id")
     if "$RUN_STEP_QA"; then
@@ -537,6 +556,7 @@ if "$RUN_TRA"; then
             "--dependency=aftercorr:$tra_id" \
             "${SCRIPT_DIR}/sbash/$tra_qa_exe")
         echo "Stage Transport QA: $tra_qa_id"
+        submitted_job_ids+=("$tra_qa_id")
     fi
 fi
 
@@ -547,6 +567,7 @@ if "$RUN_DIG"; then
 
     echo "Stage Digitization: $raw_id"
     full_qa_dependencies+=("$raw_id")
+    submitted_job_ids+=("$raw_id")
 
     rec_clpars+=("--dependency=aftercorr:$raw_id")
     if "$RUN_STEP_QA"; then
@@ -555,6 +576,7 @@ if "$RUN_DIG"; then
             "--dependency=aftercorr:$raw_id" \
             "${SCRIPT_DIR}/sbash/$raw_qa_exe")
         echo "Stage Digitization QA: $raw_qa_id"
+        submitted_job_ids+=("$raw_qa_id")
     fi
 fi
 
@@ -565,6 +587,7 @@ if "$RUN_REC"; then
 
     echo "Stage Reconstruction: $rec_id"
     full_qa_dependencies+=("$rec_id")
+    submitted_job_ids+=("$rec_id")
 
     if "$RUN_STEP_QA"; then
         rec_qa_id=$(sbatch --parsable \
@@ -572,6 +595,7 @@ if "$RUN_REC"; then
             "--dependency=aftercorr:$rec_id" \
             "${SCRIPT_DIR}/sbash/$rec_qa_exe")
         echo "Stage Reconstruction QA: $rec_qa_id"
+        submitted_job_ids+=("$rec_qa_id")
     fi
 fi
 
@@ -585,6 +609,27 @@ if "$RUN_QA"; then
         "${SCRIPT_DIR}/sbash/$qa_exe")
 
     echo "Stage QA: $qa_id"
+    submitted_job_ids+=("$qa_id")
+fi
+
+if [[ "${CBM_RUN_SNAPSHOT:-false}" == true && ${#submitted_job_ids[@]} -gt 0 ]]; then
+    cleanup_dependency=$(IFS=:; echo "${submitted_job_ids[*]}")
+    cleanup_args=(
+        "--partition=$partition"
+        "--export=ALL,CBM_RUN_SNAPSHOT_DIR=$SCRIPT_DIR"
+        "--dependency=afterany:$cleanup_dependency"
+        "--job-name=${job_name}_cleanup"
+        "--mem-per-cpu=1G"
+        "--time=00:05:00"
+        "--output=${log_dir}/%j.cleanup.log"
+    )
+    if "$debug_mode"; then
+        cleanup_args+=("${SCRIPT_DIR}/sbash/cleanup.sbash" --debug)
+    else
+        cleanup_args+=("${SCRIPT_DIR}/sbash/cleanup.sbash")
+    fi
+    cleanup_id=$(sbatch --parsable "${cleanup_args[@]}")
+    echo "Stage Cleanup: $cleanup_id"
 fi
 
 # ---------------------------------------------------------------------------

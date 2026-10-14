@@ -61,6 +61,7 @@ This submits Slurm jobs; it does not wait for completion. Monitor the printed jo
 | `-j RANGE`, `--jobs RANGE` | Override `run.task_range`. |
 | `--test` | Replace selected stages with `sbash/success.sbash`. |
 | `--local` | Execute locally instead of submitting to Slurm. |
+| `--debug` | Preserve the unique remote run snapshot after jobs finish. |
 | `-h`, `--help` | Display usage. |
 
 With an explicit YAML and no stage flags, stages come from `run.stages`. Any stage flags replace that list. Execution order is always transport → digitization → reconstruction → QA, regardless of flag or YAML order.
@@ -255,9 +256,11 @@ Default merging uses `hadd` with four jobs and writes `<qa_dir>/merged.root`. Op
 
 On hostnames beginning with `lxi`, nonlocal launches prompt for remote execution on `vae25-virgo4.hpc.gsi.de`, followed by optional synchronization. `--local` bypasses this routing. The check is hostname-based, not a check for Slurm availability.
 
-The remote project path in `run_jobs.sh` is hardcoded to `/lustre/cbm/users/dramirez/slurm_scripts_v3/`; adapt it and the SSH host to your environment.
+Each synchronized launch uses a unique directory below the hardcoded remote root `/lustre/cbm/users/dramirez/slurm_scripts_v3/`, named `run-TIMESTAMP-PID`. This immutable snapshot is the source used by every submitted job, so later local edits and overlapping submissions cannot alter an active run.
 
-Arguments are preserved, and execution starts in the remote project directory. Project-local configurations map to the same relative remote location. Relative paths resolve from the caller's working directory, with an existing parent inside the project. External configurations require an absolute path accessible remotely. Argument forwarding alone does not copy files.
+Arguments are preserved, and execution starts in the remote snapshot. Project-local configurations map to the same relative snapshot location. Relative paths resolve from the caller's working directory, with an existing parent inside the project. External configurations require an absolute path accessible remotely. Argument forwarding alone does not copy files.
+
+A cleanup job is submitted with an `afterany` dependency on every processing and QA job. It removes only the validated run snapshot after all jobs terminate, including failed jobs. Pass `--debug` to make the cleanup job preserve and report the snapshot instead. Direct submission-host and local runs do not schedule snapshot cleanup.
 
 `utils/sync.sh [DEST]` uses SSH/rsync to `lustre.hpc.gsi.de` and resolves the project root from its own location, so it can be called from any working directory. It synchronizes `run_jobs.sh`, `run_common.sh`, `sbash/`, `macros/`, `config/`, and `utils/`; unrelated data products, tests, Git metadata, and Python bytecode caches are excluded. The launcher invokes this utility by its absolute project-relative path.
 

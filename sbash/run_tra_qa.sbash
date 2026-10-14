@@ -12,9 +12,9 @@ else
   exit "$status"
 fi
 
-QA_STEP_MACRO="${CBM_RUN_DIR}/macros/run_tra_qa.C"
-QA_STEP_OUTPUT="${QA_OUT_DIR}/${TASK_ID}.tra.qa.root"
-QA_STEP_LOG="${QA_OUT_DIR}/${TASK_ID}.tra.qa.log"
+QA_STEP_MACRO="$QA_TRANSPORT_MACRO"
+QA_STEP_OUTPUT="$QA_TRANSPORT_OUTPUT"
+QA_STEP_LOG="$QA_TRANSPORT_LOG"
 
 require_file "$TRANSPORT_OUTPUT" "Transport output file"
 require_file "$TRANSPORT_PARMET" "Transport parameter file"

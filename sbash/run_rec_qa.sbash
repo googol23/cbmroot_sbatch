@@ -12,9 +12,9 @@ else
   exit "$status"
 fi
 
-QA_STEP_MACRO="${CBM_RUN_DIR}/macros/run_rec_qa.C"
-QA_STEP_OUTPUT="${QA_OUT_DIR}/${TASK_ID}.reco.qa.root"
-QA_STEP_LOG="${QA_OUT_DIR}/${TASK_ID}.reco.qa.log"
+QA_STEP_MACRO="$QA_RECONSTRUCTION_MACRO"
+QA_STEP_OUTPUT="$QA_RECONSTRUCTION_OUTPUT"
+QA_STEP_LOG="$QA_RECONSTRUCTION_LOG"
 
 require_file "$RECONSTRUCTION_OUTPUT" "Reconstruction output file"
 require_file "$QA_STEP_MACRO" "Reconstruction QA macro"

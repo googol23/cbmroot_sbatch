@@ -10,7 +10,7 @@ import unittest
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "run_jobs.sh"
-REMOTE_PROJECT = "/lustre/cbm/users/dramirez/slurm_scripts_v3"
+REMOTE_PROJECT = "/lustre/cbm/users/dramirez/slurm_scripts_v3/run-test-snapshot"
 
 
 class RemoteArgumentsTest(unittest.TestCase):
@@ -55,6 +55,7 @@ class RemoteArgumentsTest(unittest.TestCase):
             H2_REMOTE_DIR=str(self.remote),
             H2_PYTHON=sys.executable,
             H2_RECEIVER=str(self.receiver),
+            CBM_SNAPSHOT_ID="test-snapshot",
         )
 
     def command(self, name, content):

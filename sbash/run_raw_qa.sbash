@@ -12,9 +12,9 @@ else
   exit "$status"
 fi
 
-QA_STEP_MACRO="${CBM_RUN_DIR}/macros/run_raw_qa.C"
-QA_STEP_OUTPUT="${QA_OUT_DIR}/${TASK_ID}.digi.qa.root"
-QA_STEP_LOG="${QA_OUT_DIR}/${TASK_ID}.digi.qa.log"
+QA_STEP_MACRO="$QA_DIGITIZATION_MACRO"
+QA_STEP_OUTPUT="$QA_DIGITIZATION_OUTPUT"
+QA_STEP_LOG="$QA_DIGITIZATION_LOG"
 
 require_file "$DIGITIZATION_OUTPUT" "Digitization output file"
 require_file "$DIGITIZATION_PARMET" "Digitization parameter file"

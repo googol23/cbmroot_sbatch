@@ -57,10 +57,17 @@ class QaSchedulingTests(unittest.TestCase):
         path.write_text(content)
         path.chmod(0o755)
 
-    def run_launcher(self, mode):
+    def run_launcher(self, mode, *extra_options, snapshot=False):
+        env = self.env.copy()
+        if snapshot:
+            env.update(
+                CBM_RUN_SNAPSHOT="true",
+                CBM_RUN_SNAPSHOT_ROOT=str(self.root / "snapshots"),
+            )
         result = subprocess.run(
-            ["bash", str(self.project / "run_jobs.sh"), str(self.config_path), "--qa-mode", mode],
-            env=self.env, text=True, capture_output=True, timeout=10,
+            ["bash", str(self.project / "run_jobs.sh"), str(self.config_path),
+             "--qa-mode", mode, *extra_options],
+            env=env, text=True, capture_output=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return [json.loads(line) for line in self.trace.read_text().splitlines()]
@@ -91,6 +98,27 @@ class QaSchedulingTests(unittest.TestCase):
         self.assertFalse(any(arg.startswith("--array=") for arg in calls[0]))
         self.assertFalse(any(arg.startswith("--dependency=") for arg in calls[0]))
         self.assertIn("--job-name=cbmsim_qa", calls[0])
+
+    def test_snapshot_run_submits_afterany_cleanup(self):
+        self.config["run"]["stages"] = ["qa"]
+        self.config["qa"]["mode"] = "full"
+        self.config_path.write_text(yaml.safe_dump(self.config))
+        calls = self.run_launcher("full", snapshot=True)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(
+            [arg for arg in calls[1] if arg.startswith("--dependency=")],
+            ["--dependency=afterany:1"],
+        )
+        self.assertEqual(Path(calls[1][-1]).name, "cleanup.sbash")
+
+    def test_debug_snapshot_passes_debug_to_cleanup(self):
+        self.config["run"]["stages"] = ["qa"]
+        self.config["qa"]["mode"] = "full"
+        self.config_path.write_text(yaml.safe_dump(self.config))
+        calls = self.run_launcher("full", "--debug", snapshot=True)
+        self.assertEqual(calls[1][-2:], [
+            str(self.project / "sbash/cleanup.sbash"), "--debug",
+        ])
 
     def test_per_step_mode_does_not_submit_full_qa(self):
         self.config["qa"]["mode"] = "per_step"

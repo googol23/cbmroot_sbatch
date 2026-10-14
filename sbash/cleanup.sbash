@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+preserve=false
+if (( $# > 1 )); then
+    echo "Usage: cleanup.sbash [--debug]" >&2
+    exit 2
+fi
+if (( $# == 1 )); then
+    if [[ "$1" != --debug ]]; then
+        echo "Unknown cleanup option: $1" >&2
+        exit 2
+    fi
+    preserve=true
+fi
+
+: "${CBM_RUN_SNAPSHOT_DIR:?Missing snapshot directory}"
+: "${CBM_RUN_SNAPSHOT_ROOT:?Missing snapshot root}"
+
+snapshot_dir="${CBM_RUN_SNAPSHOT_DIR%/}"
+snapshot_root="${CBM_RUN_SNAPSHOT_ROOT%/}"
+
+if [[ -z "$snapshot_root" || "$snapshot_root" == / ||
+      "$snapshot_dir" == "$snapshot_root" ||
+      "$snapshot_dir" != "$snapshot_root/"* ]]; then
+    echo "Refusing to clean unsafe snapshot path: ${snapshot_dir}" >&2
+    exit 1
+fi
+
+if "$preserve"; then
+    echo "Debug mode: preserving run snapshot ${snapshot_dir}"
+    exit 0
+fi
+
+if [[ ! -d "$snapshot_dir" ]]; then
+    echo "Run snapshot already absent: ${snapshot_dir}"
+    exit 0
+fi
+
+rm -rf -- "$snapshot_dir"
+echo "Removed run snapshot: ${snapshot_dir}"

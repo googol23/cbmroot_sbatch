@@ -1,0 +1,197 @@
+{
+    "accessory": {
+        "batch": true,
+        "nEvents": 999,
+        "jobName": "cbmsim",
+        "jobRange": "1-100",
+        "jobOffset": 0,
+        "nDigitsTaskId": 1,
+        "account": "cbm",
+        "ram": "32G",
+        "partition": "main",
+        "time": "03:00:00",
+        "excludeNodes": "",
+        "logDir": "/lustre/cbm/users/${USER}/mc/out/log",
+        "cbmRoot": "/lustre/cbm/users/dramirez/CBMROOT_260630/install/bin/CbmRootConfig.sh",
+        "jobScript": "${VMCWORKDIR}/macro/PWG/common/production/run_sim_reco_json.sh",
+        "transport": {
+            "run": false,
+            "plutoShift": 0,
+            "nDigitsPlutoFileId": 5,
+            "seed": "1234 + ${taskId}",
+            "macro": "${VMCWORKDIR}/macro/PWG/common/production/run_transport_json_config.C"
+        },
+        "digitization": {
+          "run": true,
+            "macro": "${VMCWORKDIR}/macro/PWG/common/production/run_digi_json_config.C"
+        },
+        "reconstruction": {
+          "run": true,
+            "macro": "${VMCWORKDIR}/macro/PWG/common/production/run_reco_json_config.C"
+        },
+        "AT": {
+            "run": false,
+            "macro": "${VMCWORKDIR}/macro/PWG/common/production/run_analysis_tree_maker_json_config.C"
+        }
+    },
+    "logScreenLevel": "INFO",
+    "logVerbosityLevel": "HIGH",
+    "transport": {
+        "input": [
+            {
+                "generator": "unigen",
+                "file": "/lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root/dcmqgsm_${taskId}.root"
+            },
+            {
+                "#generator": "pluto",
+                "file": "/lustre/cbm/users/galatyuk/pluto/epem/12gev/w_pluto/sum_w_1000_001.zip#w_${plutoFileId}.root",
+                "plutoPdg": 0
+            },
+            {
+                "#generator": "beam",
+                "beamA": 197,
+                "beamZ": 79,
+                "beamQ": 79,
+                "beamP": 12.0,
+                "beamStartZ": -45.0
+            }
+        ],
+        "output": {
+            "path": "/lustre/cbm/users/${USER}/mc/out/tra/${taskId}/${taskId}",
+            "overwrite": false
+        },
+        "target": {
+            "material": "Gold",
+            "thickness": 0.025,
+            "diameter": 2.5,
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": -44.0
+            },
+            "rotation.y": 0.0
+        },
+        "beam": {
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+                "zFocus": -44.0,
+                "sigmaX": 0.06,
+                "sigmaY": 0.06
+            },
+            "angle": {
+                "x": 0.0,
+                "y": 0.0,
+                "sigmaX": 0.001,
+                "sigmaY": 0.001
+            }
+        },
+        "randomRP": true,
+        "geantVersion": 4,
+        "geant4vmcSettings": {
+            "physicsLists": "QGSP_BERT_EMV+optical",
+            "specialProcesses": "stepLimiter+specialCuts",
+            "maxNsteps": 10000,
+            "geant4commands": [""]
+        },
+        "geometry": {
+            "baseSetup": "sis100_electron",
+            "magneticField": {
+                "tag": "v22c",
+                "scale": 1.0,
+                "position": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                }
+            },
+            "subsystems": {
+                "magnet": "v22a",
+                "pipe": "v21d:v24h",
+                "mvd": "v20d_tr",
+                "sts": "v22d",
+                "rich": "v25a",
+                "trd": "v25a_1e",
+                "tof": "v21a_1e",
+                "fsd": "v25h",
+                "platform": "v22b"
+            }
+        },
+        "stackFilter": {
+            "storeAllPrimaries": true,
+            "storeAllMothers": true,
+            "storeAllDecays": true
+        }
+    },
+
+    "digitization": {
+        "generateRunInfo": false,
+        "eventMode": false,
+        "#timeSliceLength": 1e5,
+        "#storeAllTimeSlices": false,
+        "startTime": 1000,
+        "produceNoise": true,
+        "timeDist": "poisson",
+        "inactive_channels" : {
+          "#sts": "/lustre/cbm/users/dramirez/parameters/channel_mask.txt"
+        },
+        "input": [
+            {
+                "id": 0,
+                "path": "/lustre/cbm/users/${USER}/mc/out/tra/${taskId}/${taskId}",
+                "rate": "1.e7",
+                "treeAccessMode": "regular",
+                "parameterSource": false
+            },
+            {
+                "id": -1,
+                "path": "test_emb",
+                "embedToId": 0,
+                "treeAccessMode": "regular"
+            },
+            {
+                "id": -1,
+                "path": "test_beam",
+                "rate": "1.e9",
+                "treeAccessMode": "random"
+            }
+        ],
+        "output": {
+            "path": "/lustre/cbm/users/${USER}/mc/out/raw/${taskId}/${taskId}",
+            "overwrite": true
+        },
+        "geometry": {
+            "deactivate": ["", ""],
+            "#deactivateAllBut": ""
+        }
+    },
+
+    "reconstruction": {
+        "digiFile": "/lustre/cbm/users/${USER}/mc/out/raw/${taskId}/${taskId}",
+        "nTimeSlices": -1,
+        "firstTimeSlice": 0,
+        "output": {
+            "path": "/lustre/cbm/users/${USER}/mc/out/rec/${taskId}/${taskId}",
+            "overwrite": true
+        },
+        "sEvBuildRaw": "Ideal",
+        "traFiles": [
+            "/lustre/cbm/users/${USER}/mc/out/tra/${taskId}/${taskId}"
+        ],
+        "isL1Matching": true,
+        "isL1EffQA": false
+    },
+
+    "AT": {
+        "traFiles": [
+            "/lustre/cbm/users/${USER}/mc/out/tra/${taskId}/${taskId}"
+        ],
+        "digiFile": "/lustre/cbm/users/${USER}/mc/out/raw/${taskId}/${taskId}",
+        "recFile": "/lustre/cbm/users/${USER}/mc/out/rec/${taskId}/${taskId}",
+        "unigenFile": "/lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root/dcmqgsm_${taskId}.root",
+        "output": {
+            "path": "/lustre/cbm/users/${USER}/mc/out/AT/${taskId}/${taskId}",
+            "overwrite": true
+        }
+    }
+}
