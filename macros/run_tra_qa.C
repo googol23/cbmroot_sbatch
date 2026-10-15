@@ -1,6 +1,9 @@
-void run_tra_qa(TString traFile, TString parFile = "", Int_t nEvents = -1,
-                TString sinkFile = "test.tra.qa.root")
+void run_tra_qa(TString traFile = "/lustre/cbm/users/dramirez/mc/out/test/tra/1/1.tra.root",
+                TString parFile = "/lustre/cbm/users/dramirez/mc/out/test/tra/1/1.par.root",
+                Int_t nEvents = -1,
+                TString sinkFile = "/lustre/cbm/users/dramirez/mc/out/test/qa/1/1.tra.qa.root")
 {
+
   Int_t verbose = 1;
 
   // -----   FairRunAna   ---------------------------------------------------
@@ -17,17 +20,13 @@ void run_tra_qa(TString traFile, TString parFile = "", Int_t nEvents = -1,
   run->AddTask(qaManager);
   // ------------------------------------------------------------------------
 
-  // -----   MC data required by CbmStsTransportQa   -------------------------
-  auto* mcManager = new CbmMCDataManager("MCDataManager", 0);
-  mcManager->AddFileToChain(traFile, 0);
-  qaManager->AddTask(mcManager);
-  // ------------------------------------------------------------------------
-
   // -----   QA task   -------------------------------------------------------
   qaManager->AddTask(new cbm::qa::CbmStsTransportQa(verbose, /*isMCUsed*/ kTRUE));
   // ------------------------------------------------------------------------
 
   // -----   Parameter database (optional; not needed by the task below)   ---
+  // Not used by TransportTask (it requests no FairParSet), kept as the hook point for a real QA
+  // task that does need one (e.g. geometry-dependent QA).
   if (!parFile.IsNull()) {
     FairRuntimeDb* rtdb       = run->GetRuntimeDb();
     FairParRootFileIo* parIo1 = new FairParRootFileIo();
@@ -36,7 +35,7 @@ void run_tra_qa(TString traFile, TString parFile = "", Int_t nEvents = -1,
   }
   // ------------------------------------------------------------------------
 
-  // -----   Run   -----------------------------------------------------------
+  // -----   Run   ------------------------------------------------------------
   run->Init();
   run->Run(0, nEvents);
   // ------------------------------------------------------------------------
