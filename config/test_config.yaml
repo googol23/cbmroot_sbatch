@@ -7,7 +7,7 @@ remote:
   snapshot_root: /lustre/cbm/users/${USER}/
 
 run:
-  # stages: [transport, digitization, reconstruction, qa]
+  # stages: [reconstruction, qa]
   stages: [qa]
   task_range: "1-2"
   pipeline_test: false
@@ -15,6 +15,7 @@ run:
   partition: long
   mem_per_cpu: 16G
   time: "01:00:00"
+  # cbmroot_setup: /scratch/cbm/dramirez/cbmroot_build/config.sh
   cbmroot_setup: /scratch/cbm/dramirez/cbmroot_install/bin/CbmRootConfig.sh
   input_dir: /lustre/cbm/pwg/common/mc/generators/dcmqgsm_smm/auau/pbeam12agev/mbias/root
   output_dir: /lustre/cbm/users/${USER}/mc/out/test/
@@ -92,8 +93,8 @@ digitization:
       fsd: v25h
       platform: v22b
 
-    # deadChannelFiles:
-    #   sts: "/lustre/cbm/users/dramirez/parameters/channel_mask.txt"
+    deadChannelFiles:
+      sts: "/lustre/cbm/users/dramirez/parameters/channel_mask.txt"
 
 reconstruction:
   mode: event
@@ -117,5 +118,5 @@ reconstruction:
 
 qa:
   # mode: full
-  mode: per_step
-  # mode: or both
+  # mode: per_step
+  mode: both

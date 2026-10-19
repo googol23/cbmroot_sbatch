@@ -19,7 +19,7 @@ fi
 
 require_file "${TRANSPORT_OUTPUT}" "Transport output file"
 require_file "${DIGITIZATION_OUTPUT}" "Digitization output file"
-require_file "${TRANSPORT_PARMET}" "Digitization parameter file"
+require_file "${DIGITIZATION_PARMET}" "Digitization parameter file"
 require_file "${REC_CONFIG_FILE}" "Reconstruction configuration file"
 require_file "${RECONSTRUCTION_BIN}" "Reconstruction binnary file"
 
@@ -28,11 +28,13 @@ require_command "root"
 # ---------------------------------------------------------------------------
 # Reconstruction
 # ---------------------------------------------------------------------------
+run_command cp -- "${DIGITIZATION_PARMET}" "${RECONSTRUCTION_PARMET}"
+
 log "Starting reconstruction."
 
 run_logged_command "${RECONSTRUCTION_LOG}" "${RECONSTRUCTION_BIN}" \
   --transport "${TRANSPORT_OUTPUT}" \
-  --parameter "${DIGITIZATION_PARMET}" \
+  --parameter "${RECONSTRUCTION_PARMET}" \
   --digitization "${DIGITIZATION_OUTPUT}" \
   --output "${RECONSTRUCTION_OUTPUT}" \
   --setup "${SETUP_TAG}" \

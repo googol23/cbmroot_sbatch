@@ -244,7 +244,7 @@ void run_qa(TString outputDir, TString taskRange, TString setup = "sis100_electr
 
   const Int_t firstId = taskIds.front();
 
-  const TString parFile = TString::Format("%s/raw/%d/%d.par.root", outputDir.Data(), firstId, firstId);
+  const TString parFile = TString::Format("%s/rec/%d/%d.par.root", outputDir.Data(), firstId, firstId);
 
   const TString qaOutput = TString::Format("%s/qa/qa.root", outputDir.Data());
 
@@ -518,15 +518,10 @@ void run_qa(const std::vector<TString>& dataTraColl, const std::vector<TString>&
   // -------------------------------------------------------------------------
   // CA parameters
   // -------------------------------------------------------------------------
-  auto& caParameters = cbm::ca::ParametersHandler::Instance();
-  caParameters.SetMainConfig((srcDir + "/macro/L1/configs/ca_params_sts.yaml").Data());
-  if (bUseMvd && sEvBuildRaw.EqualTo("Real", TString::ECaseCompare::kIgnoreCase)) {
-    std::cout << "-I- cbm::ca::ParametersHandler: "
-              << "explicitly disabling MVD "
-              << "for the Real event builder\n";
 
-    caParameters.DisableStation(cbm::algo::ca::EDetectorID::kMvd, -1);
-  }
+  auto& caParameters     = cbm::ca::ParametersHandler::Instance();
+  const TString caConfig = srcDir + "/macro/L1/configs/ca_params_sts.yaml";
+  caParameters.SetMainConfig(caConfig.Data());
   qaManager->AddTask(&caParameters);
 
 
@@ -539,32 +534,12 @@ void run_qa(const std::vector<TString>& dataTraColl, const std::vector<TString>&
     qaManager->AddTask(matchTask);
   }
 
-  // -------------------------------------------------------------------------
-  // STS input QA
-  // -------------------------------------------------------------------------
-
-  if (bUseSts) {
-
-    qaManager->AddTask(new CbmCaInputQaSts(verbose, bUseMC));
-  }
-
 
   // -------------------------------------------------------------------------
   // KF
   // -------------------------------------------------------------------------
 
   qaManager->AddTask(new CbmKF());
-
-
-  // -------------------------------------------------------------------------
-  // CA input QA setup
-  // -------------------------------------------------------------------------
-
-  auto* inputQaSetup = new cbm::ca::InputQaSetup(verbose, bUseMC);
-
-  inputQaSetup->SetSetupName(setup.Data());
-
-  qaManager->AddTask(inputQaSetup);
 
 
   // -------------------------------------------------------------------------
@@ -575,11 +550,7 @@ void run_qa(const std::vector<TString>& dataTraColl, const std::vector<TString>&
 
   outputQa->SetStsTrackingMode();
 
-  if (!config.IsNull()) {
-    outputQa->SetConfigName(config);
-  }
-
-  outputQa->SetUseMvd(bUseMvd && !sEvBuildRaw.EqualTo("Real", TString::ECaseCompare::kIgnoreCase));
+  outputQa->SetUseMvd(bUseMvd);
 
   outputQa->SetUseSts(bUseSts);
 

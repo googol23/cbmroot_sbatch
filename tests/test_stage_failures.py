@@ -2,14 +2,13 @@
 
 import json
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
-
+from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
 STAGES = {
@@ -78,8 +77,12 @@ class StageFailureTests(unittest.TestCase):
             SLURM_ARRAY_TASK_ID="1",
             H7_TRACE=str(self.trace),
         )
-        for stage, key in [("tra", "CFG_TRA_CONFIG"), ("raw", "CFG_RAW_CONFIG"),
-                           ("rec", "CFG_REC_CONFIG"), ("qa", "CFG_QA_CONFIG")]:
+        for stage, key in [
+            ("tra", "CFG_TRA_CONFIG"),
+            ("raw", "CFG_RAW_CONFIG"),
+            ("rec", "CFG_REC_CONFIG"),
+            ("qa", "CFG_QA_CONFIG"),
+        ]:
             config = self.root / (stage + ".yaml")
             config.write_text("fixture: true\n")
             self.env[key] = str(config)
@@ -92,7 +95,10 @@ class StageFailureTests(unittest.TestCase):
     def run_stage(self, stage):
         return subprocess.run(
             ["bash", str(self.project / "sbash" / STAGES[stage][0])],
-            env=self.env, text=True, capture_output=True, timeout=5,
+            env=self.env,
+            text=True,
+            capture_output=True,
+            timeout=5,
         )
 
     def assert_stopped(self, result, status=None):
@@ -109,10 +115,25 @@ class StageFailureTests(unittest.TestCase):
                 self.trace.unlink(missing_ok=True)
                 result = self.run_stage(stage)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                calls = [json.loads(line) for line in self.trace.read_text().splitlines()]
+                calls = [
+                    json.loads(line) for line in self.trace.read_text().splitlines()
+                ]
                 self.assertEqual(len(calls), 1)
-                self.assertIn("FAKE_PROCESSING_OUTPUT", (self.output / folder / "1" / filename).read_text())
-        self.assertEqual((self.output / "raw/1/1.par.root").read_text(), "parameter fixture")
+                self.assertIn(
+                    "FAKE_PROCESSING_OUTPUT",
+                    (self.output / folder / "1" / filename).read_text(),
+                )
+        self.assertEqual(
+            (self.output / "raw/1/1.par.root").read_text(), "parameter fixture"
+        )
+        self.assertEqual(
+            (self.output / "rec/1/1.par.root").read_text(), "parameter fixture"
+        )
+        rec_call = json.loads(self.trace.read_text().splitlines()[-1])
+        parameter_index = rec_call.index("--parameter") + 1
+        self.assertEqual(
+            rec_call[parameter_index], str(self.output / "rec/1/1.par.root")
+        )
 
     def test_failed_setup_stops_all_stages_and_preserves_status(self):
         self.setup.write_text(
@@ -153,7 +174,9 @@ class StageFailureTests(unittest.TestCase):
                 self.assert_stopped(self.run_stage(stage))
 
     def test_trailing_slash_in_environment_is_supported(self):
-        self.setup.write_text("export VMCWORKDIR=" + shlex.quote(str(self.vmc) + "/") + "\n")
+        self.setup.write_text(
+            "export VMCWORKDIR=" + shlex.quote(str(self.vmc) + "/") + "\n"
+        )
         result = self.run_stage("transport")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(self.trace.exists())
@@ -169,11 +192,29 @@ class StageFailureTests(unittest.TestCase):
         result = self.run_stage("digitization")
         self.assert_stopped(result, 24)
 
+    def test_parameter_copy_failure_stops_reconstruction(self):
+        self.command("cp", "exit 25")
+        result = self.run_stage("reconstruction")
+        self.assert_stopped(result, 25)
+
     def test_parameter_copy_preserves_paths_with_spaces(self):
         (self.output / "tra/1/1.par.root").write_text("new parameter contents")
         result = self.run_stage("digitization")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.output / "raw/1/1.par.root").read_text(), "new parameter contents")
+        self.assertEqual(
+            (self.output / "raw/1/1.par.root").read_text(), "new parameter contents"
+        )
+
+    def test_reconstruction_parameter_copy_uses_digitization_parameters(self):
+        (self.output / "raw/1/1.par.root").write_text("digitization parameters")
+        result = self.run_stage("reconstruction")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            (self.output / "rec/1/1.par.root").read_text(), "digitization parameters"
+        )
+        call = json.loads(self.trace.read_text().splitlines()[-1])
+        parameter_index = call.index("--parameter") + 1
+        self.assertEqual(call[parameter_index], str(self.output / "rec/1/1.par.root"))
 
     def test_log_open_failure_stops_all_stages(self):
         for stage, (_, folder, filename) in STAGES.items():
